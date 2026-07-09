@@ -1,0 +1,6 @@
+name,slug,parent_slug,brand_name,description,image_url,sort_order,is_active
+Smartfonlar,smartfonlar,,,"Ana kateqoriya",,1,1
+Apple,smartfonlar-apple,smartfonlar,Apple,"Apple smartfonlar",,1,1
+Samsung,smartfonlar-samsung,smartfonlar,Samsung,"Samsung smartfonlar",,2,1
+Planşetlər,plansetler,,,"Ana kateqoriya",,2,1
+Apple Planşet,plansetler-apple,plansetler,Apple,"Apple planşetlər",,1,1

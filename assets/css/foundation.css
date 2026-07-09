@@ -1,0 +1,96 @@
+/**
+ * Maxhome — global responsive foundation (həmişə ilk yüklənin)
+ * Breakpoint tokenları: mobile <768, tablet 768–1023, desktop 1024+
+ */
+:root {
+    --bp-sm: 480px;
+    --bp-md: 768px;
+    --bp-lg: 1024px;
+    --bp-xl: 1280px;
+
+    --container-max: 80rem;
+    --container-pad: clamp(0.75rem, 3vw, 1.5rem);
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+}
+
+img,
+video,
+picture {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Məzmun qutusunun daşmaması üçün */
+main,
+section,
+article,
+header,
+footer {
+    min-width: 0;
+}
+
+.mh-container {
+    width: 100%;
+    max-width: var(--container-max);
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--container-pad);
+    padding-right: var(--container-pad);
+}
+
+.u-min-w-0 {
+    min-width: 0;
+}
+
+.u-w-full {
+    width: 100%;
+}
+
+.u-overflow-x-auto {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Footer semantikası — checkout + index ilə uyğun */
+.footer,
+.main-footer {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Qiymət rəqəmi ilə ₼ həmişə eyni sətirdə (dar sütunlarda sözlərarası bölünməsin) */
+.maxhome-search-suggest__price,
+.maxhome-search-suggest__old-price,
+.product-card__price,
+.product-card__price-compare,
+.product-card__link,
+.price__amount,
+.price__compare,
+.ecosystem-price,
+.ecosystem-total-price,
+.product-price,
+.product-price-old,
+.price-now,
+.price-old,
+.cart-item__price,
+.price-row__value,
+.price-row--free,
+.total-value,
+.summary__row-value,
+.summary__total-value,
+.product-installment strong {
+    white-space: nowrap;
+}
