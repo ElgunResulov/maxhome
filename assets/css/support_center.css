@@ -5,10 +5,10 @@
     --primary-fixed: #d5e3ff;
     --on-primary: #ffffff;
     --on-primary-container: #799dd6;
-    --secondary: #525f75;
+    --secondary: #3d4858;
     --surface: #f9f9f9;
     --on-surface: #1a1c1c;
-    --on-surface-variant: #43474f;
+    --on-surface-variant: #2f343c;
     --surface-container: #eeeeee;
     --surface-container-low: #f4f3f3;
     --surface-container-lowest: #ffffff;
@@ -175,13 +175,13 @@ ul {
 }
 
 .hero-subtitle {
-    color: var(--on-primary-container);
+    color: #d5e3ff;
     font-size: 1.125rem;
     margin-bottom: 2.5rem;
     max-width: 42rem;
     margin-left: auto;
     margin-right: auto;
-    opacity: 0.9;
+    opacity: 1;
 }
 
 .search-wrapper {
@@ -259,7 +259,7 @@ ul {
 .search-result-a {
     display: block;
     margin-top: 0.2rem;
-    color: #64748b;
+    color: #3f4853;
     font-size: 0.84rem;
     line-height: 1.45;
 }
@@ -281,7 +281,7 @@ ul {
 .tag-label {
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--on-primary-container);
+    color: #d5e3ff;
     align-self: center;
 }
 
@@ -409,7 +409,7 @@ ul {
 }
 
 .bento-link-disabled {
-    color: #94a3b8;
+    color: #3f4853;
     cursor: not-allowed;
 }
 
@@ -776,7 +776,7 @@ ul {
 }
 
 .footer-brand-desc {
-    color: #64748b;
+    color: #3f4853;
     font-size: 0.875rem;
     line-height: 1.625;
 }
@@ -795,7 +795,7 @@ ul {
 }
 
 .footer-link {
-    color: #64748b;
+    color: #3f4853;
     font-size: 0.875rem;
 }
 
@@ -843,7 +843,7 @@ ul {
 }
 
 .copyright {
-    color: #94a3b8;
+    color: #3f4853;
     font-size: 0.875rem;
 }
 

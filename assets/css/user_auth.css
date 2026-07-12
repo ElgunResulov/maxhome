@@ -48,7 +48,7 @@ body {
 .brand-sub {
     margin-top: 8px;
     text-align: center;
-    color: #6b7280;
+    color: #3f4853;
     font-size: 12px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -97,7 +97,7 @@ body {
     transform: translateY(-50%);
     border: 0;
     background: transparent;
-    color: #9ca3af;
+    color: #3f4853;
     cursor: pointer;
     font-size: 14px;
 }
@@ -157,6 +157,92 @@ body {
 .flash-success {
     background: #dcfce7;
     color: #166534;
+}
+
+.forgot-panel {
+    margin-top: 4px;
+    padding: 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #f9fafb;
+}
+
+.forgot-panel__head {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.forgot-panel__title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.forgot-panel__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #dbe1ea;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #4338ca;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.forgot-panel__back:hover {
+    border-color: #c7d2fe;
+    background: #eef2ff;
+    color: #3730a3;
+    box-shadow: 0 2px 8px rgba(67, 56, 202, 0.08);
+}
+
+.forgot-panel__back:focus-visible {
+    outline: none;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.forgot-panel__back-icon {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.forgot-panel__text {
+    margin: 0 0 12px;
+    font-size: 14px;
+    color: #4b5563;
+    line-height: 1.5;
+}
+
+.forgot-link-btn {
+    width: 100%;
+    margin-top: 8px;
+    border: 0;
+    background: transparent;
+    color: #4338ca;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.forgot-link-btn:hover {
+    text-decoration: underline;
+}
+
+.auth-row a {
+    color: #4338ca;
+    text-decoration: none;
+}
+
+.auth-row a:hover {
+    text-decoration: underline;
 }
 
 @media (max-width: 767px) {

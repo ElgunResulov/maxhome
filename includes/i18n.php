@@ -56,10 +56,14 @@ function maxhome_translations(): array
             'flash.empty' => 'Aktiv flash təklif tapılmadı.',
             'trending.label' => 'Ən çox satılanlar',
             'trending.title' => 'Bu məhsullar hər kəsin sevimlisidir!',
+            'home.rail_robot' => 'Robot Tozsoranlar',
+            'home.rail_bestsellers' => 'Ən çox satılanlar',
+            'home.rail_ac' => 'Evinizə uyğun sərinlik',
             'product.compare' => 'Müqayisə et',
             'product.reviews' => 'rəy',
             'product.months' => 'ay',
             'product.add_to_cart' => 'Səbətə əlavə et',
+            'product.out_of_stock' => 'Stokda yoxdur',
             'product.add_wishlist' => 'Seçilmişlərə əlavə et',
             'trending.empty' => 'Trend məhsul tapılmadı.',
             'features.fallback_title' => 'MAXHOME təcrübəsi',
@@ -107,10 +111,14 @@ function maxhome_translations(): array
             'flash.empty' => 'No active flash deal found.',
             'trending.label' => 'Best sellers',
             'trending.title' => 'These are everyone\'s favorites!',
+            'home.rail_robot' => 'Robot Vacuums',
+            'home.rail_bestsellers' => 'Best sellers',
+            'home.rail_ac' => 'Coolness for your home',
             'product.compare' => 'Compare',
             'product.reviews' => 'reviews',
             'product.months' => 'months',
             'product.add_to_cart' => 'Add to cart',
+            'product.out_of_stock' => 'Out of stock',
             'product.add_wishlist' => 'Add to wishlist',
             'trending.empty' => 'No trending products found.',
             'features.fallback_title' => 'MAXHOME Experience',
@@ -416,12 +424,24 @@ function maxhome_translate_text_fragment(string $text, array $map): string
         return $text;
     }
 
-    // Fast path: exact replacements.
-    $translated = strtr($text, $map);
+    $translated = $text;
+    foreach ($map as $source => $target) {
+        if ($source === '' || $source === $target) {
+            continue;
+        }
+
+        if (mb_strlen($source) <= 3) {
+            $pattern = '/\b' . preg_quote($source, '/') . '\b/u';
+            $translated = (string) preg_replace($pattern, $target, $translated);
+            continue;
+        }
+
+        $translated = strtr($translated, [$source => $target]);
+    }
 
     // Fallback: tolerate whitespace/newline differences in DB text blocks.
     foreach ($map as $source => $target) {
-        if ($source === '' || $source === $target) {
+        if ($source === '' || $source === $target || mb_strlen($source) <= 3) {
             continue;
         }
         $pattern = '/\b' . preg_replace('/\s+/u', '\\s+', preg_quote($source, '/')) . '\b/u';

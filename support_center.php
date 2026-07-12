@@ -293,7 +293,7 @@ if (empty($supportContactCards)) {
             </div>
         </div>
         <div class="footer-bottom">
-            <p class="copyright">© 2024 MAXHOME Electronics. Digital Concierge Experience.</p>
+            <p class="copyright">© 2026 MAXHOME Electronics. Digital Concierge Experience.</p>
         </div>
     </footer>
     <!-- Live Chat Floating CTA -->

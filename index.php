@@ -54,6 +54,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['newsletter_email'])) 
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_to_cart'])) {
+    try {
+        $productId = (int) ($_POST['product_id'] ?? 0);
+        $qty = max(1, (int) ($_POST['quantity'] ?? 1));
+        addToCart($pdo, $productId, $qty);
+        header('Location: shopping_cart.php');
+        exit;
+    } catch (Throwable $e) {
+        $cartFlashMessage = $e->getMessage();
+        $cartFlashType = 'error';
+    }
+}
+
+$cartFlashMessage = $cartFlashMessage ?? '';
+$cartFlashType = $cartFlashType ?? 'error';
+
 // Ana kateqoriyalar (3 ədəd)
 $categoriesStmt = $pdo->query(
     "SELECT id, name, slug, description, image_url
@@ -64,37 +80,74 @@ $categoriesStmt = $pdo->query(
 );
 $heroCategories = $categoriesStmt->fetchAll() ?: [];
 
-// Trending məhsullar - en çox satanlar (order_items əsasında TOP 8).
-// Əgər 8-dən azdırsa, qalanı son aktiv məhsullarla doldururuq.
+/**
+ * Ana səhifə məhsul kartı üçün ortaq select sütunları.
+ */
+$maxhomeProductSelectSql = "
+    p.id,
+    p.slug,
+    p.name,
+    p.short_description,
+    p.base_price,
+    p.compare_at_price,
+    p.stock_qty,
+    p.rating_avg,
+    p.rating_count,
+    (SELECT image_url
+     FROM product_images
+     WHERE product_id = p.id
+     ORDER BY is_primary DESC, sort_order ASC, id ASC
+     LIMIT 1) AS image_url
+";
+
+/**
+ * Kateqoriya slug-una görə aktiv məhsulları gətirir (alt kateqoriyalar daxil).
+ *
+ * @return list<array<string, mixed>>
+ */
+$maxhomeFetchByCategorySlug = static function (PDO $pdo, string $slug, int $limit, string $catalogOnlineSql, string $selectSql): array {
+    $slug = trim($slug);
+    if ($slug === '' || $limit < 1) {
+        return [];
+    }
+
+    $stmt = $pdo->prepare(
+        "WITH RECURSIVE cat_tree AS (
+            SELECT id FROM categories WHERE slug = :slug AND is_active = 1
+            UNION ALL
+            SELECT c.id
+            FROM categories c
+            INNER JOIN cat_tree t ON c.parent_id = t.id
+            WHERE c.is_active = 1
+        )
+        SELECT {$selectSql}
+        FROM products p
+        WHERE p.status = 'active'{$catalogOnlineSql}
+          AND p.category_id IN (SELECT id FROM cat_tree)
+        ORDER BY p.created_at DESC, p.rating_avg DESC, p.id DESC
+        LIMIT {$limit}"
+    );
+    $stmt->execute(['slug' => $slug]);
+    return $stmt->fetchAll() ?: [];
+};
+
+// Trending məhsullar - en çox satanlar (order_items əsasında TOP 12).
 $trendingStmt = $pdo->query(
     "SELECT
-        p.id,
-        p.slug,
-        p.name,
-        p.short_description,
-        p.base_price,
-        p.compare_at_price,
-        p.rating_avg,
-        p.rating_count,
-        COALESCE(SUM(oi.quantity), 0) AS sold_qty,
-        (SELECT image_url
-         FROM product_images
-         WHERE product_id = p.id
-         ORDER BY is_primary DESC, sort_order ASC, id ASC
-         LIMIT 1) AS image_url
+        {$maxhomeProductSelectSql},
+        COALESCE(SUM(oi.quantity), 0) AS sold_qty
      FROM products p
      LEFT JOIN order_items oi ON oi.product_id = p.id
      WHERE p.status = 'active'{$catalogOnlineSql}
-     GROUP BY p.id, p.slug, p.name, p.short_description, p.base_price, p.compare_at_price, p.rating_avg, p.rating_count
+     GROUP BY p.id, p.slug, p.name, p.short_description, p.base_price, p.compare_at_price, p.stock_qty, p.rating_avg, p.rating_count
      HAVING sold_qty > 0
      ORDER BY sold_qty DESC, p.rating_avg DESC, p.id DESC
-     LIMIT 8"
+     LIMIT 12"
 );
 $trendingProducts = $trendingStmt->fetchAll() ?: [];
 
-// 8 kart tamamlanmırsa, əlavə aktiv məhsullarla doldur.
-if (count($trendingProducts) < 8) {
-    $needed = 8 - count($trendingProducts);
+if (count($trendingProducts) < 12) {
+    $needed = 12 - count($trendingProducts);
     $existingIds = array_column($trendingProducts, 'id');
     $notInClause = '';
     if (!empty($existingIds)) {
@@ -104,20 +157,8 @@ if (count($trendingProducts) < 8) {
 
     $fallbackSql = "
         SELECT
-            p.id,
-            p.slug,
-            p.name,
-            p.short_description,
-            p.base_price,
-            p.compare_at_price,
-            p.rating_avg,
-            p.rating_count,
-            0 AS sold_qty,
-            (SELECT image_url
-             FROM product_images
-             WHERE product_id = p.id
-             ORDER BY is_primary DESC, sort_order ASC, id ASC
-             LIMIT 1) AS image_url
+            {$maxhomeProductSelectSql},
+            0 AS sold_qty
         FROM products p
         WHERE p.status = 'active'{$catalogOnlineSql} {$notInClause}
         ORDER BY p.created_at DESC, p.rating_avg DESC, p.id DESC
@@ -127,6 +168,133 @@ if (count($trendingProducts) < 8) {
     $fallbackProducts = $fallbackStmt->fetchAll() ?: [];
     $trendingProducts = array_merge($trendingProducts, $fallbackProducts);
 }
+
+$robotVacuumProducts = $maxhomeFetchByCategorySlug($pdo, 'robot-tozsoranlar', 12, $catalogOnlineSql, $maxhomeProductSelectSql);
+$airConditionerProducts = $maxhomeFetchByCategorySlug($pdo, 'kondisionerler', 12, $catalogOnlineSql, $maxhomeProductSelectSql);
+
+/**
+ * Ana səhifə məhsul kartını render edir.
+ *
+ * @param array<string, mixed> $product
+ */
+$maxhomeRenderHomeProductCard = static function (array $product): void {
+    $basePrice = (float) ($product['base_price'] ?? 0);
+    $comparePrice = (float) ($product['compare_at_price'] ?? 0);
+    $oldPrice = $comparePrice > $basePrice ? $comparePrice : null;
+    $discountAmount = $oldPrice !== null ? ($oldPrice - $basePrice) : 0.0;
+    $discountPct = ($oldPrice !== null && $oldPrice > 0)
+        ? (int) round(($discountAmount / $oldPrice) * 100)
+        : 0;
+    $stockQty = (int) ($product['stock_qty'] ?? 0);
+    $outOfStock = $stockQty < 1;
+    ?>
+    <article class="mh-card">
+        <div class="mh-card__media">
+            <?php if ($discountPct > 0): ?>
+                <span class="mh-card__pct">-<?php echo $discountPct; ?>%</span>
+            <?php endif; ?>
+            <div class="mh-card__icons">
+                <button
+                    class="mh-card__icon js-product-compare-btn"
+                    type="button"
+                    aria-label="<?php echo e(t('product.compare')); ?>"
+                    data-product-id="<?php echo (int) $product['id']; ?>"
+                    data-product-slug="<?php echo e((string) $product['slug']); ?>"
+                    data-product-name="<?php echo e((string) $product['name']); ?>">
+                    <span class="material-symbols-outlined">balance</span>
+                </button>
+                <button
+                    class="mh-card__icon"
+                    type="button"
+                    aria-label="<?php echo e(t('product.add_wishlist')); ?>">
+                    <span class="material-symbols-outlined">favorite</span>
+                </button>
+            </div>
+            <a class="mh-card__img-link" href="product_details.php?slug=<?php echo urlencode((string) $product['slug']); ?>">
+                <img
+                    alt="<?php echo e((string) $product['name']); ?>"
+                    class="mh-card__img"
+                    src="<?php echo e((string) ($product['image_url'] ?: 'https://via.placeholder.com/600x600?text=Product')); ?>"
+                    loading="lazy" />
+            </a>
+        </div>
+        <h3 class="mh-card__title">
+            <a href="product_details.php?slug=<?php echo urlencode((string) $product['slug']); ?>">
+                <?php echo e((string) $product['name']); ?>
+            </a>
+        </h3>
+        <div class="mh-card__pricing">
+            <?php if ($discountAmount > 0): ?>
+                <span class="mh-card__save">-<?php echo number_format($discountAmount, 2); ?> ₼</span>
+            <?php endif; ?>
+            <?php if ($oldPrice !== null): ?>
+                <span class="mh-card__old"><?php echo number_format($oldPrice, 2); ?> ₼</span>
+            <?php endif; ?>
+            <span class="mh-card__price"><?php echo number_format($basePrice, 2); ?> ₼</span>
+        </div>
+        <form method="post" class="mh-card__form">
+            <input type="hidden" name="product_id" value="<?php echo (int) $product['id']; ?>">
+            <input type="hidden" name="quantity" value="1">
+            <button
+                class="mh-card__cart"
+                type="submit"
+                name="add_to_cart"
+                <?php echo $outOfStock ? 'disabled' : ''; ?>>
+                <span class="material-symbols-outlined">shopping_cart</span>
+                <?php echo $outOfStock ? e(t('product.out_of_stock', 'Stokda yoxdur')) : e(t('product.add_to_cart')); ?>
+            </button>
+        </form>
+    </article>
+    <?php
+};
+
+/**
+ * Ana səhifə məhsul carousel sırasını render edir.
+ *
+ * @param list<array<string, mixed>> $products
+ */
+$maxhomeRenderHomeRail = static function (string $title, array $products, callable $renderCard): void {
+    if (empty($products)) {
+        return;
+    }
+    ?>
+    <div class="home-rail" data-home-rail>
+        <div class="home-rail__head">
+            <h2 class="home-rail__title"><?php echo e($title); ?></h2>
+            <div class="home-rail__nav" aria-label="<?php echo e($title); ?>">
+                <button class="home-rail__btn" type="button" data-rail-prev aria-label="Əvvəlki">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <button class="home-rail__btn" type="button" data-rail-next aria-label="Növbəti">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+            </div>
+        </div>
+        <div class="home-rail__viewport">
+            <div class="home-rail__track" data-rail-track>
+                <?php foreach ($products as $product): ?>
+                    <?php $renderCard($product); ?>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+    <?php
+};
+
+$homeProductRails = [
+    [
+        'title' => t('home.rail_robot', 'Robot Tozsoranlar'),
+        'products' => $robotVacuumProducts,
+    ],
+    [
+        'title' => t('home.rail_bestsellers', 'Ən çox satılanlar'),
+        'products' => $trendingProducts,
+    ],
+    [
+        'title' => t('home.rail_ac', 'Evinizə uyğun sərinlik'),
+        'products' => $airConditionerProducts,
+    ],
+];
 
 // Homepage setting: Flash sale config
 $settingsStmt = $pdo->query(
@@ -342,6 +510,7 @@ unset($slideRow);
     <link rel="stylesheet" href="assets/css/foundation.css">
     <link rel="stylesheet" href="assets/css/navbar.css">
     <link rel="stylesheet" href="assets/css/index.css">
+    <link rel="stylesheet" href="assets/css/product_compare.css">
 </head>
 
 <body>
@@ -416,7 +585,7 @@ unset($slideRow);
                                             <?php echo e((string) $heroProduct['name']); ?>
                                         </h1>
                                         <p class="hero-description">
-                                            <?php echo e((string) ($heroProduct['short_description'] ?: t('hero.default_short_description'))); ?>
+                                            <?php echo e(maxhomeProductPlainText((string) ($heroProduct['short_description'] ?: t('hero.default_short_description')))); ?>
                                         </p>
                                         <div class="btn-group">
                                             <a class="btn btn--primary" href="product_details.php?slug=<?php echo urlencode((string) $heroProduct['slug']); ?>">
@@ -598,78 +767,23 @@ unset($slideRow);
                 </div>
             </div>
         </section>
-        <!-- Trending -->
-        <section class="trending">
-            <div class="trending-header">
-                <span class="trending-label"><?php echo e(t('trending.label')); ?></span>
-                <h2><?php echo e(t('trending.title')); ?></h2>
-                <div class="title-underline"></div>
-            </div>
-            <div class="products-grid">
-                <?php if (!empty($trendingProducts)): ?>
-                    <?php foreach ($trendingProducts as $product): ?>
-                        <?php
-                        $basePrice = (float) $product['base_price'];
-                        $comparePrice = (float) ($product['compare_at_price'] ?? 0);
-                        $oldPrice = $comparePrice > $basePrice ? $comparePrice : null;
-                        $discountAmount = $oldPrice !== null ? ($oldPrice - $basePrice) : 0.0;
-                        $monthlyInstallment = $basePrice / 6;
-                        ?>
-                        <div class="product-card">
-                            <div class="product-img-box">
-                                <?php if ($discountAmount > 0): ?>
-                                    <span class="product-badge product-badge--discount">
-                                        -<?php echo number_format($discountAmount, 0); ?> ₼
-                                    </span>
-                                <?php endif; ?>
-                                <button class="product-compare-btn" type="button" aria-label="<?php echo e(t('product.compare')); ?>">
-                                    <span class="material-symbols-outlined">balance</span>
-                                </button>
-                                <a href="product_details.php?slug=<?php echo urlencode((string) $product['slug']); ?>">
-                                    <img
-                                        alt="<?php echo e((string) $product['name']); ?>"
-                                        class="product-img"
-                                        src="<?php echo e((string) ($product['image_url'] ?: 'https://via.placeholder.com/600x600?text=Product')); ?>" />
-                                </a>
-                            </div>
-                            <div class="product-info">
-                                <div class="product-meta-row">
-                                    <span class="product-meta-item">
-                                        <span class="material-symbols-outlined star-icon" style="font-variation-settings: 'FILL' 1;">star</span>
-                                        <?php echo (int) ($product['rating_count'] ?? 0); ?>
-                                    </span>
-                                    <span class="product-meta-item">
-                                        <span class="material-symbols-outlined review-icon">chat_bubble</span>
-                                        0 <?php echo e(t('product.reviews')); ?>
-                                    </span>
-                                </div>
-                                <h3 class="product-name">
-                                    <a href="product_details.php?slug=<?php echo urlencode((string) $product['slug']); ?>">
-                                        <?php echo e((string) $product['name']); ?>
-                                    </a>
-                                </h3>
-                            </div>
-                            <div class="product-footer">
-                                <?php if ($oldPrice !== null): ?>
-                                    <span class="product-price-old"><?php echo number_format($oldPrice, 2); ?> ₼</span>
-                                <?php endif; ?>
-                                <div class="product-price-row">
-                                    <span class="product-price"><?php echo number_format($basePrice, 2); ?> ₼</span>
-                                    <span class="product-installment">6 <?php echo e(t('product.months')); ?> <strong><?php echo number_format($monthlyInstallment, 2); ?> ₼</strong></span>
-                                </div>
-                            </div>
-                            <div class="product-actions">
-                                <a class="product-add-btn" href="product_details.php?slug=<?php echo urlencode((string) $product['slug']); ?>">
-                                    <span class="material-symbols-outlined">shopping_basket</span>
-                                    <?php echo e(t('product.add_to_cart')); ?>
-                                </a>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <p style="padding: 1rem;"><?php echo e(t('trending.empty')); ?></p>
-                <?php endif; ?>
-            </div>
+        <!-- Məhsul carousel sıraları -->
+        <section class="home-rails container">
+            <?php if ($cartFlashMessage !== ''): ?>
+                <p class="trending-flash trending-flash--<?php echo e($cartFlashType); ?>"><?php echo e($cartFlashMessage); ?></p>
+            <?php endif; ?>
+            <?php
+            $hasAnyRail = false;
+            foreach ($homeProductRails as $rail) {
+                if (!empty($rail['products'])) {
+                    $hasAnyRail = true;
+                    $maxhomeRenderHomeRail((string) $rail['title'], $rail['products'], $maxhomeRenderHomeProductCard);
+                }
+            }
+            if (!$hasAnyRail):
+            ?>
+                <p class="home-rails__empty"><?php echo e(t('trending.empty')); ?></p>
+            <?php endif; ?>
         </section>
         <script>
             (function() {
@@ -952,6 +1066,45 @@ unset($slideRow);
 
         startAutoSlide();
     })();
+</script>
+<script src="assets/js/product_compare.js"></script>
+<script>
+(function () {
+    document.querySelectorAll('[data-home-rail]').forEach(function (rail) {
+        var track = rail.querySelector('[data-rail-track]');
+        var prevBtn = rail.querySelector('[data-rail-prev]');
+        var nextBtn = rail.querySelector('[data-rail-next]');
+        if (!track || !prevBtn || !nextBtn) {
+            return;
+        }
+
+        function scrollAmount() {
+            var card = track.querySelector('.mh-card');
+            if (!card) {
+                return track.clientWidth * 0.8;
+            }
+            var styles = window.getComputedStyle(track);
+            var gap = parseFloat(styles.columnGap || styles.gap || '16') || 16;
+            return card.getBoundingClientRect().width + gap;
+        }
+
+        function updateButtons() {
+            var maxScroll = track.scrollWidth - track.clientWidth - 2;
+            prevBtn.disabled = track.scrollLeft <= 2;
+            nextBtn.disabled = track.scrollLeft >= maxScroll;
+        }
+
+        prevBtn.addEventListener('click', function () {
+            track.scrollBy({ left: -scrollAmount(), behavior: 'smooth' });
+        });
+        nextBtn.addEventListener('click', function () {
+            track.scrollBy({ left: scrollAmount(), behavior: 'smooth' });
+        });
+        track.addEventListener('scroll', updateButtons, { passive: true });
+        window.addEventListener('resize', updateButtons);
+        updateButtons();
+    });
+})();
 </script>
 </body>
 

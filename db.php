@@ -771,9 +771,181 @@ function maxhomeProductPriceDisplay(array $product): array
     ];
 }
 
+/**
+ * Taksit müddətlərinə görə faiz faizləri (dəyər üstünə).
+ *
+ * @return array<int, float>
+ */
+function maxhomeProductInstallmentRates(): array
+{
+    return [
+        3 => 14.0,
+        6 => 20.0,
+        9 => 22.0,
+        12 => 27.0,
+    ];
+}
+
+/**
+ * Taksit cədvəli üçün 3/6/9/12 ay seçimləri.
+ * Hər müddət üçün satış qiymətinə müvafiq faiz əlavə olunur.
+ *
+ * @return list<array{months: int, initial_payment: float, monthly: float, total: float}>
+ */
+function maxhomeProductInstallmentOptions(float $basePrice, ?float $listPrice = null, array $terms = [3, 6, 9, 12]): array
+{
+    if ($basePrice <= 0) {
+        return [];
+    }
+
+    $rates = maxhomeProductInstallmentRates();
+    $options = [];
+    foreach ($terms as $months) {
+        $months = (int) $months;
+        if ($months < 1) {
+            continue;
+        }
+
+        $ratePercent = $rates[$months] ?? 0.0;
+        $total = round($basePrice * (1 + $ratePercent / 100), 2);
+        $options[] = [
+            'months' => $months,
+            'initial_payment' => 0.0,
+            'monthly' => round($total / $months, 2),
+            'total' => $total,
+        ];
+    }
+
+    return $options;
+}
+
 function e(string $value): string
 {
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * @return list<string>
+ */
+function maxhomeInternalProductSpecKeys(): array
+{
+    return ['source_url', 'currency', 'source_id', 'gtin'];
+}
+
+function maxhomeIsInternalProductSpecKey(string $specKey): bool
+{
+    return in_array(strtolower(trim($specKey)), maxhomeInternalProductSpecKeys(), true);
+}
+
+/**
+ * @return list<string>
+ */
+function maxhomeAllowedProductHtmlTags(): array
+{
+    return ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'span', 'div'];
+}
+
+function maxhomeSanitizeProductHtml(string $html): string
+{
+    $html = trim($html);
+    if ($html === '') {
+        return '';
+    }
+
+    if (str_contains($html, '&lt;') && !str_contains($html, '<')) {
+        $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    }
+
+    $allowedTags = maxhomeAllowedProductHtmlTags();
+    $allowed = '<' . implode('><', $allowedTags) . '>';
+    $html = strip_tags($html, $allowed);
+    if ($html === '') {
+        return '';
+    }
+
+    if (!class_exists('DOMDocument')) {
+        return $html;
+    }
+
+    $document = new DOMDocument();
+    $previous = libxml_use_internal_errors(true);
+    $document->loadHTML(
+        '<?xml encoding="utf-8" ?><div id="maxhome-root">' . $html . '</div>',
+        LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+    );
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+
+    $root = $document->getElementById('maxhome-root');
+    if (!$root) {
+        return $html;
+    }
+
+    $allowedTagMap = array_fill_keys($allowedTags, true);
+    $nodes = $document->getElementsByTagName('*');
+    for ($i = $nodes->length - 1; $i >= 0; $i--) {
+        $node = $nodes->item($i);
+        if (!$node instanceof DOMElement) {
+            continue;
+        }
+
+        $tag = strtolower($node->tagName);
+        if ($tag === 'div' && $node->getAttribute('id') === 'maxhome-root') {
+            while ($node->attributes->length > 0) {
+                $node->removeAttribute($node->attributes->item(0)->nodeName);
+            }
+            continue;
+        }
+
+        if (!isset($allowedTagMap[$tag])) {
+            $parent = $node->parentNode;
+            if ($parent) {
+                while ($node->firstChild) {
+                    $parent->insertBefore($node->firstChild, $node);
+                }
+                $parent->removeChild($node);
+            }
+            continue;
+        }
+
+        while ($node->attributes->length > 0) {
+            $node->removeAttribute($node->attributes->item(0)->nodeName);
+        }
+    }
+
+    $output = '';
+    foreach ($root->childNodes as $child) {
+        $output .= $document->saveHTML($child);
+    }
+
+    return trim($output);
+}
+
+function maxhomeProductPlainText(string $html, int $maxLength = 0): string
+{
+    $plain = trim(preg_replace('/\s+/u', ' ', strip_tags(maxhomeSanitizeProductHtml($html))) ?? '');
+    if ($maxLength > 0 && mb_strlen($plain) > $maxLength) {
+        $plain = mb_substr($plain, 0, $maxLength) . '...';
+    }
+
+    return $plain;
+}
+
+function maxhomeRenderProductHtml(string $html): string
+{
+    $html = trim($html);
+    if ($html === '') {
+        return '';
+    }
+
+    $sanitized = maxhomeSanitizeProductHtml($html);
+    if ($sanitized !== '') {
+        return $sanitized;
+    }
+
+    $decoded = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+    return nl2br(htmlspecialchars($decoded, ENT_QUOTES, 'UTF-8'));
 }
 
 /**

@@ -3,7 +3,7 @@
     --primary-container: #003366;
     --primary-fixed: #d5e3ff;
     --on-primary: #ffffff;
-    --secondary: #525f75;
+    --secondary: #3d4858;
     --secondary-container: #d6e3fe;
     --on-secondary: #ffffff;
     --surface: #f9f9f9;
@@ -13,8 +13,8 @@
     --surface-container-high: #e8e8e8;
     --surface-variant: #e2e2e2;
     --on-surface: #1a1c1c;
-    --on-surface-variant: #43474f;
-    --outline: #737780;
+    --on-surface-variant: #2f343c;
+    --outline: #5a616b;
     --outline-variant: #c3c6d1;
     --tertiary-container: #592300;
     --star-color: #fbbf24;
@@ -155,7 +155,7 @@ h3,
     gap: 0.5rem;
     font-size: 0.75rem;
     font-weight: 500;
-    color: var(--outline);
+    color: var(--on-surface-variant);
     margin-bottom: 1rem;
 }
 
@@ -186,7 +186,7 @@ h3,
 .product-count {
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--outline);
+    color: var(--on-surface-variant);
 }
 
 /* Controls Bar */
@@ -243,7 +243,7 @@ h3,
     background: none;
     cursor: pointer;
     border-radius: 0.375rem;
-    color: var(--outline);
+    color: var(--on-surface-variant);
 }
 
 .view-btn--active {
@@ -448,7 +448,7 @@ h3,
     justify-content: space-between;
     margin-top: 1rem;
     font-size: 0.75rem;
-    color: var(--outline);
+    color: var(--on-surface-variant);
 }
 
 .ram-chips {
@@ -482,12 +482,127 @@ h3,
 /* Product Grid */
 .product-grid-container {
     flex: 1;
+    position: relative;
+    min-height: 18rem;
+}
+
+.shop-is-loading .shop-content {
+    display: none;
+}
+
+.shop-skeleton {
+    display: none;
+}
+
+.shop-is-loading .shop-skeleton {
+    display: block;
+}
+
+@keyframes shop-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.shop-skeleton-block {
+    background: linear-gradient(90deg, #e8ebf2 0%, #f4f6fa 45%, #e8ebf2 90%);
+    background-size: 200% 100%;
+    animation: shop-shimmer 1.35s ease-in-out infinite;
+    border-radius: 0.5rem;
+}
+
+.shop-skeleton-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    align-items: stretch;
+}
+
+@media (min-width: 768px) {
+    .shop-skeleton-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1280px) {
+    .shop-skeleton-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+.shop-skeleton-card {
+    background: var(--surface-container-lowest);
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.shop-skeleton-block--image {
+    height: 20rem;
+    border-radius: 0;
+}
+
+.shop-skeleton-card__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 1rem 1.1rem 1.15rem;
+    flex: 1;
+}
+
+.shop-skeleton-block--title {
+    width: 88%;
+    height: 1rem;
+}
+
+.shop-skeleton-block--subtitle {
+    width: 42%;
+    height: 0.75rem;
+}
+
+.shop-skeleton-block--desc {
+    width: 100%;
+    height: 0.7rem;
+    margin-top: 0.15rem;
+}
+
+.shop-skeleton-block--desc-short {
+    width: 72%;
+    height: 0.7rem;
+}
+
+.shop-skeleton-card__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: auto;
+    padding-top: 0.85rem;
+}
+
+.shop-skeleton-block--price {
+    width: 5.5rem;
+    height: 1.2rem;
+}
+
+.shop-skeleton-block--btn {
+    flex: 1;
+    max-width: 9rem;
+    height: 2.2rem;
+    border-radius: 999px;
 }
 
 .product-grid {
     display: grid;
     grid-template-columns: 1fr;
     gap: 1.5rem;
+    align-items: stretch;
 }
 
 @media (min-width: 768px) {
@@ -510,6 +625,9 @@ h3,
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     transition: all 0.5s;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 .product-card:hover {
@@ -617,11 +735,15 @@ h3,
 }
 
 .product-card__content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
     padding: 1.5rem;
 }
 
 .product-card__header {
     margin-bottom: 0.35rem;
+    min-height: 3.35rem;
 }
 
 .product-card__meta-row {
@@ -646,6 +768,12 @@ h3,
     color: var(--primary);
     line-height: 1.3;
     transition: color 0.2s;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    min-height: 2.6em;
 }
 
 .product-card:hover .product-card__title {
@@ -655,7 +783,7 @@ h3,
 .product-card__subtitle {
     margin-top: 0.2rem;
     font-size: 0.75rem;
-    color: var(--outline);
+    color: var(--on-surface-variant);
     font-weight: 500;
 }
 
@@ -663,13 +791,15 @@ h3,
     margin: 0.5rem 0 0;
     font-size: 0.8125rem;
     line-height: 1.45;
-    color: #64748b;
+    color: #3f4853;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+    min-height: 2.36em;
 }
 
 
@@ -685,12 +815,14 @@ h3,
     text-align: right;
     gap: 0.1rem;
     margin-left: auto;
+    min-height: 2.5rem;
+    justify-content: flex-end;
 }
 
 .product-card__price-compare {
     font-size: 0.75rem;
     font-weight: 500;
-    color: #9ca3af;
+    color: #3f4853;
     text-decoration: line-through;
     line-height: 1.2;
 }
@@ -710,7 +842,8 @@ h3,
 }
 
 .product-card__cart-form {
-    margin-top: 0.85rem;
+    margin-top: auto;
+    padding-top: 0.85rem;
 }
 
 .rating {
@@ -726,12 +859,12 @@ h3,
 }
 
 .star--empty {
-    color: var(--outline);
+    color: var(--on-surface-variant);
 }
 
 .review-count {
     font-size: 10px;
-    color: var(--outline);
+    color: var(--on-surface-variant);
     margin-left: 0.5rem;
 }
 
@@ -791,7 +924,7 @@ h3,
 
 .page-dots {
     margin: 0 0.5rem;
-    color: var(--outline);
+    color: var(--on-surface-variant);
 }
 
 /* Footer */
@@ -824,7 +957,7 @@ h3,
 }
 
 .footer__desc {
-    color: #64748b;
+    color: #3f4853;
     font-size: 0.875rem;
     line-height: 1.625;
 }
@@ -847,7 +980,7 @@ h3,
 
 .footer__link {
     text-decoration: none;
-    color: #64748b;
+    color: #3f4853;
     font-size: 0.875rem;
     transition: color 0.2s;
     text-underline-offset: 4px;
@@ -900,7 +1033,7 @@ h3,
 
 .footer__copy {
     font-size: 0.75rem;
-    color: #94a3b8;
+    color: #3f4853;
 }
 
 .footer__legal {
@@ -911,7 +1044,7 @@ h3,
 .legal-link {
     text-decoration: none;
     font-size: 0.75rem;
-    color: #94a3b8;
+    color: #3f4853;
     transition: color 0.2s;
 }
 

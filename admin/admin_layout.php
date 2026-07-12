@@ -20,6 +20,7 @@ function adminSidebar(string $activePage): void
         'support_faqs' => ['href' => 'admin_support_faqs.php', 'label' => 'Support suallari'],
         'support_contacts' => ['href' => 'admin_support_contacts.php', 'label' => 'Support contact kartlari'],
         'whatsapp_settings' => ['href' => 'admin_whatsapp_settings.php', 'label' => 'WhatsApp ayarlari'],
+        'mail_settings' => ['href' => 'admin_mail_settings.php', 'label' => 'Email ayarlari'],
         'orders' => ['href' => 'admin_orders.php', 'label' => 'Sifarisler'],
         'shop' => ['href' => '../shop_page.php', 'label' => 'Magazani ac'],
     ];

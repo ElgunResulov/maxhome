@@ -1124,10 +1124,10 @@ function productJsonImportSingleProduct(
         $activeCategories
     );
     $brandId = productJsonImportResolveBrandId($pdo, (string) ($item['brand_name'] ?? $item['brand'] ?? ''));
-    $description = trim((string) ($item['description'] ?? ''));
-    $shortDescription = trim((string) ($item['short_description'] ?? ''));
+    $description = maxhomeSanitizeProductHtml(trim((string) ($item['description'] ?? '')));
+    $shortDescription = maxhomeSanitizeProductHtml(trim((string) ($item['short_description'] ?? '')));
     if ($shortDescription === '' && $description !== '') {
-        $shortDescription = mb_substr($description, 0, 280);
+        $shortDescription = maxhomeProductPlainText($description, 280);
     }
     $status = trim((string) ($item['status'] ?? 'active'));
     if (!in_array($status, ['draft', 'active', 'archived'], true)) {
@@ -1182,23 +1182,6 @@ function productJsonImportSingleProduct(
         if (!is_array($specs)) {
             $specs = [];
         }
-        $metaSpecs = [];
-        if (!empty($item['gtin'])) {
-            $metaSpecs['gtin'] = (string) $item['gtin'];
-        }
-        if (!empty($item['source_id'])) {
-            $metaSpecs['source_id'] = (string) $item['source_id'];
-        }
-        if (!empty($item['source_url'])) {
-            $metaSpecs['source_url'] = (string) $item['source_url'];
-        }
-        if (!empty($item['currency'])) {
-            $metaSpecs['currency'] = (string) $item['currency'];
-        }
-        if (!empty($item['source'])) {
-            $metaSpecs['source'] = (string) $item['source'];
-        }
-        $specs = array_merge($metaSpecs, $specs);
         if ($specs !== []) {
             $specStmt = $pdo->prepare(
                 "INSERT INTO product_specs (product_id, spec_key, spec_value, sort_order)
@@ -1211,7 +1194,7 @@ function productJsonImportSingleProduct(
                 }
                 $key = trim((string) $specKey);
                 $value = trim((string) $specValue);
-                if ($key === '' || $value === '') {
+                if ($key === '' || $value === '' || maxhomeIsInternalProductSpecKey($key)) {
                     continue;
                 }
                 $specStmt->execute([

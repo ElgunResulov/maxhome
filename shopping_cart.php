@@ -111,14 +111,16 @@ if (!in_array($selectedPaymentMethod, ['', 'card', 'cash_on_delivery'], true)) {
                             <span class="summary__total-value"><?php echo number_format($totals['total'], 2); ?> ₼</span>
                         </div>
                         <?php if (isUserLoggedIn()): ?>
-                            <div style="margin-top: 12px;">
-                                <label for="payment_method" style="display:block; font-weight: 600; margin-bottom: 6px;">Ödəniş üsulu</label>
-                                <select id="payment_method" class="text-input" style="width: 100%; height: 44px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.12); padding: 0 12px;">
+                            <div class="summary__payment">
+                                <label class="summary__payment-label" for="payment_method">Ödəniş üsulu</label>
+                                <select id="payment_method" class="summary__payment-select">
                                     <option value="card" <?php echo $selectedPaymentMethod === 'card' || $selectedPaymentMethod === '' ? 'selected' : ''; ?>>Kartla ödəniş</option>
                                     <option value="cash_on_delivery" <?php echo $selectedPaymentMethod === 'cash_on_delivery' ? 'selected' : ''; ?>>Nağd ödəniş</option>
                                 </select>
                             </div>
-                            <a class="checkout-btn" id="checkoutLink" href="checkout.php<?php echo $selectedPaymentMethod !== '' ? ('?payment_method=' . urlencode($selectedPaymentMethod)) : '?payment_method=card'; ?>" style="text-decoration: none; margin-top: 12px;">İndi ödəniş et</a>
+                            <div class="summary__actions">
+                                <a class="checkout-btn" id="checkoutLink" href="checkout.php<?php echo $selectedPaymentMethod !== '' ? ('?payment_method=' . urlencode($selectedPaymentMethod)) : '?payment_method=card'; ?>">İndi ödəniş et</a>
+                            </div>
                             <script>
                             (function () {
                                 var sel = document.getElementById('payment_method');
@@ -133,7 +135,9 @@ if (!in_array($selectedPaymentMethod, ['', 'card', 'cash_on_delivery'], true)) {
                             })();
                             </script>
                         <?php else: ?>
-                            <a class="checkout-btn" href="user_login.php?redirect=checkout.php">Ödəniş üçün daxil olun</a>
+                            <div class="summary__actions">
+                                <a class="checkout-btn" href="user_login.php?redirect=checkout.php">Ödəniş üçün daxil olun</a>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>

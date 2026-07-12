@@ -338,7 +338,7 @@ $messageType = 'success';
                 $name = trim((string) ($_POST['name'] ?? ''));
                 $slug = productJsonImportResolveProductSlug($pdo, ['name' => $name, 'slug' => '']);
                 $sku = trim((string) ($_POST['sku'] ?? ''));
-                $shortDescription = trim((string) ($_POST['short_description'] ?? ''));
+                $shortDescription = maxhomeSanitizeProductHtml(trim((string) ($_POST['short_description'] ?? '')));
                 $basePrice = (float) ($_POST['base_price'] ?? 0);
                 $compareAtRaw = trim((string) ($_POST['compare_at_price'] ?? ''));
                 $compareAtPrice = null;

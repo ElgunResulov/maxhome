@@ -838,9 +838,10 @@ $products = $productsStmt->fetchAll() ?: [];
     <link rel="stylesheet" href="assets/css/foundation.css">
     <link rel="stylesheet" href="assets/css/navbar.css">
     <link rel="stylesheet" href="assets/css/shop_page.css">
+    <link rel="stylesheet" href="assets/css/product_compare.css">
 </head>
 
-<body>
+<body class="shop-is-loading">
     <?php $currentPage = 'shop page'; ?>
     <?php include 'navbar.php'; ?>
     <main class="container main-content">
@@ -945,6 +946,27 @@ $products = $productsStmt->fetchAll() ?: [];
                 </form>
             </aside>
             <div class="product-grid-container">
+                <div class="shop-skeleton" aria-hidden="true">
+                    <div class="shop-skeleton-grid">
+                        <?php for ($skeletonIndex = 0; $skeletonIndex < 9; $skeletonIndex++): ?>
+                            <article class="shop-skeleton-card">
+                                <div class="shop-skeleton-block shop-skeleton-block--image"></div>
+                                <div class="shop-skeleton-card__body">
+                                    <div class="shop-skeleton-block shop-skeleton-block--title"></div>
+                                    <div class="shop-skeleton-block shop-skeleton-block--subtitle"></div>
+                                    <div class="shop-skeleton-block shop-skeleton-block--desc"></div>
+                                    <div class="shop-skeleton-block shop-skeleton-block--desc-short"></div>
+                                    <div class="shop-skeleton-card__footer">
+                                        <div class="shop-skeleton-block shop-skeleton-block--price"></div>
+                                        <div class="shop-skeleton-block shop-skeleton-block--btn"></div>
+                                    </div>
+                                </div>
+                            </article>
+                        <?php endfor; ?>
+                    </div>
+                </div>
+
+                <div class="shop-content">
                 <div class="product-grid">
                     <?php if (empty($products)): ?>
                         <p style="padding: 24px; color: #475569;">Aktiv məhsul tapılmadı.</p>
@@ -965,6 +987,15 @@ $products = $productsStmt->fetchAll() ?: [];
                                 role="link"
                                 tabindex="0">
                                 <div class="product-card__image-box">
+                                    <button
+                                        class="product-compare-btn js-product-compare-btn"
+                                        type="button"
+                                        aria-label="Müqayisə et"
+                                        data-product-id="<?php echo (int) $product['id']; ?>"
+                                        data-product-slug="<?php echo e((string) $product['slug']); ?>"
+                                        data-product-name="<?php echo e((string) $product['name']); ?>">
+                                        <span class="material-symbols-outlined">balance</span>
+                                    </button>
                                     <img
                                         alt="<?php echo e($product['name']); ?>"
                                         class="<?php echo e($imgClass); ?>"
@@ -985,7 +1016,7 @@ $products = $productsStmt->fetchAll() ?: [];
                                         </span>
                                     </div>
                                     <p class="product-card__desc">
-                                        <?php echo e($product['short_description'] ?: 'Premium keyfiyyətli məhsul.'); ?>
+                                        <?php echo e(maxhomeProductPlainText((string) ($product['short_description'] ?: 'Premium keyfiyyətli məhsul.'))); ?>
                                     </p>
                                     <div class="product-card__meta-row">
                                         <a
@@ -1064,9 +1095,44 @@ $products = $productsStmt->fetchAll() ?: [];
                         <?php endif; ?>
                     </nav>
                 <?php endif; ?>
+                </div>
             </div>
         </div>
     </main>
+    <script>
+    (function () {
+        var body = document.body;
+
+        function showContent() {
+            body.classList.remove('shop-is-loading');
+        }
+
+        function showSkeleton() {
+            body.classList.add('shop-is-loading');
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', showContent);
+        } else {
+            showContent();
+        }
+
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                showContent();
+            }
+        });
+
+        var filterForm = document.getElementById('filter_form');
+        if (filterForm) {
+            filterForm.addEventListener('submit', showSkeleton);
+        }
+
+        document.querySelectorAll('.pagination a[href]').forEach(function (link) {
+            link.addEventListener('click', showSkeleton);
+        });
+    })();
+    </script>
     <script>
         (function () {
             var filterForm = document.getElementById('filter_form');
@@ -1240,6 +1306,7 @@ $products = $productsStmt->fetchAll() ?: [];
             });
         })();
     </script>
+    <script src="assets/js/product_compare.js"></script>
     <!-- Footer -->
     <footer class="footer">
         <div class="footer__grid">

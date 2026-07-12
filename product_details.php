@@ -110,6 +110,9 @@ $productRatingAvg = 0.0;
 $productRatingCount = 0;
 $productBasePrice = 0.0;
 $productListPrice = null;
+$installmentOptions = [];
+$installmentHighlightMonths = 12;
+$installmentHighlightMonthly = 0.0;
 if ($product) {
     $ratingStats = maxhomeGetProductRatingStats(
         $pdo,
@@ -123,6 +126,15 @@ if ($product) {
     $priceDisplay = maxhomeProductPriceDisplay($product);
     $productBasePrice = $priceDisplay['base_price'];
     $productListPrice = $priceDisplay['list_price'];
+    $installmentOptions = maxhomeProductInstallmentOptions($productBasePrice, $productListPrice);
+    $installmentHighlightMonths = 12;
+    $installmentHighlightMonthly = 0.0;
+    foreach ($installmentOptions as $installmentOption) {
+        if ((int) $installmentOption['months'] === $installmentHighlightMonths) {
+            $installmentHighlightMonthly = (float) $installmentOption['monthly'];
+            break;
+        }
+    }
 
     $imgStmt = $pdo->prepare("SELECT image_url, alt_text FROM product_images WHERE product_id = :pid ORDER BY is_primary DESC, sort_order ASC, id ASC");
     $imgStmt->execute(['pid' => (int) $product['id']]);
@@ -145,7 +157,7 @@ if ($product) {
     $specRowsByKey = [];
     foreach ($specs as $specRow) {
         $specKey = trim((string) ($specRow['spec_key'] ?? ''));
-        if ($specKey === '') {
+        if ($specKey === '' || maxhomeIsInternalProductSpecKey($specKey)) {
             continue;
         }
         $specRowsByKey[$specKey] = $specRow;
@@ -213,7 +225,7 @@ if ($product) {
     // Category mapindan kenar (custom) saheleri de sonda goster.
     foreach ($specs as $specRow) {
         $specKey = (string) ($specRow['spec_key'] ?? '');
-        if ($specKey === '' || isset($usedSpecKeys[$specKey])) {
+        if ($specKey === '' || isset($usedSpecKeys[$specKey]) || maxhomeIsInternalProductSpecKey($specKey)) {
             continue;
         }
         $rawValue = trim((string) ($specRow['spec_value'] ?? ''));
@@ -326,13 +338,43 @@ if (count($bundleProductsDisplay) > 1) {
             </div>
             <div class="product-hero">
                 <div class="gallery">
-                    <div class="gallery__main">
+                    <div class="gallery__main" id="product-gallery-main" data-gallery-count="<?php echo count($images); ?>" tabindex="0">
                         <img
                             alt="<?php echo e($mainAlt); ?>"
                             class="gallery__image"
                             id="product-main-image"
                             src="<?php echo e($mainImage); ?>"
                         />
+                        <?php if (count($images) > 1): ?>
+                            <button
+                                type="button"
+                                class="gallery__nav gallery__nav--prev"
+                                id="product-gallery-prev"
+                                aria-label="Əvvəlki şəkil">
+                                <span class="material-symbols-outlined">chevron_left</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="gallery__nav gallery__nav--next"
+                                id="product-gallery-next"
+                                aria-label="Növbəti şəkil">
+                                <span class="material-symbols-outlined">chevron_right</span>
+                            </button>
+                            <div class="gallery__pagination" id="product-gallery-pagination" aria-live="polite">
+                                <div class="gallery__dots" id="product-gallery-dots">
+                                    <?php foreach ($images as $idx => $image): ?>
+                                        <button
+                                            type="button"
+                                            class="gallery__dot<?php echo $idx === 0 ? ' gallery__dot--active' : ''; ?>"
+                                            data-gallery-index="<?php echo $idx; ?>"
+                                            aria-label="Şəkil <?php echo $idx + 1; ?>"
+                                            <?php echo $idx === 0 ? 'aria-current="true"' : ''; ?>>
+                                        </button>
+                                    <?php endforeach; ?>
+                                </div>
+                                <span class="gallery__pagination-count" id="product-gallery-count">1 / <?php echo count($images); ?></span>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <?php if (count($images) > 1): ?>
                         <div class="gallery__thumbs" id="product-gallery-thumbs">
@@ -340,15 +382,40 @@ if (count($bundleProductsDisplay) > 1) {
                                 <button
                                     type="button"
                                     class="gallery__thumb<?php echo $idx === 0 ? ' gallery__thumb--active' : ''; ?>"
+                                    data-gallery-index="<?php echo $idx; ?>"
                                     data-image-src="<?php echo e((string) $image['image_url']); ?>"
                                     data-image-alt="<?php echo e((string) ($image['alt_text'] ?: $product['name'])); ?>"
-                                    aria-label="Sekli sec"
+                                    aria-label="Şəkil <?php echo $idx + 1; ?>"
                                 >
                                     <img alt="<?php echo e($image['alt_text'] ?: $product['name']); ?>" class="gallery__thumb-img" src="<?php echo e($image['image_url']); ?>" />
                                 </button>
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
+                </div>
+                <div
+                    class="gallery-lightbox"
+                    id="gallery-lightbox"
+                    hidden
+                    aria-hidden="true">
+                    <button type="button" class="gallery-lightbox__backdrop" id="gallery-lightbox-backdrop" aria-label="Bağla"></button>
+                    <div class="gallery-lightbox__dialog" role="dialog" aria-modal="true" aria-label="Böyüdülmüş şəkil">
+                        <button type="button" class="gallery-lightbox__close" id="gallery-lightbox-close" aria-label="Bağla">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                        <?php if (count($images) > 1): ?>
+                            <button type="button" class="gallery-lightbox__nav gallery-lightbox__nav--prev" id="gallery-lightbox-prev" aria-label="Əvvəlki şəkil">
+                                <span class="material-symbols-outlined">chevron_left</span>
+                            </button>
+                            <button type="button" class="gallery-lightbox__nav gallery-lightbox__nav--next" id="gallery-lightbox-next" aria-label="Növbəti şəkil">
+                                <span class="material-symbols-outlined">chevron_right</span>
+                            </button>
+                        <?php endif; ?>
+                        <img class="gallery-lightbox__image" id="gallery-lightbox-image" alt="<?php echo e($mainAlt); ?>" src="<?php echo e($mainImage); ?>" />
+                        <?php if (count($images) > 1): ?>
+                            <div class="gallery-lightbox__count" id="gallery-lightbox-count">1 / <?php echo count($images); ?></div>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <div class="product-info">
                     <header>
@@ -371,15 +438,25 @@ if (count($bundleProductsDisplay) > 1) {
                                 <span class="price__amount"><?php echo number_format($productBasePrice, 2); ?> ₼</span>
                             <?php endif; ?>
                         </div>
+                        <?php
+                        if ($productBasePrice > 0) {
+                            require __DIR__ . '/includes/product_installment_section.php';
+                        }
+                        ?>
                         <form method="post" class="buy-card__form">
                             <input type="hidden" name="product_id" value="<?php echo (int) $product['id']; ?>">
                             <input type="hidden" name="quantity" value="1">
                             <div class="buy-card__description">
                                 <p class="buy-card__description-label">Təsvir</p>
                                 <div class="buy-card__description-box">
-                                    <p class="buy-card__description-text">
-                                        <?php echo e((string) ($product['short_description'] ?: 'Bu məhsul üçün qısa təsvir əlavə edilməyib.')); ?>
-                                    </p>
+                                    <div class="buy-card__description-text product-rich-text">
+                                        <?php
+                                        $shortDescriptionHtml = maxhomeRenderProductHtml((string) ($product['short_description'] ?? ''));
+                                        echo $shortDescriptionHtml !== ''
+                                            ? $shortDescriptionHtml
+                                            : e('Bu məhsul üçün qısa təsvir əlavə edilməyib.');
+                                        ?>
+                                    </div>
                                 </div>
                             </div>
                             <div class="action-btns">
@@ -388,11 +465,11 @@ if (count($bundleProductsDisplay) > 1) {
                             </div>
                         </form>
                     </div>
-                    <div class="concierge-box">
+                    <div class="concierge-box " >
                         <span class="material-symbols-outlined" style="font-size: 2rem;">verified_user</span>
                         <div>
                             <p class="concierge-box__title">Rəqəmsal konsyerj dəstəyi daxildir</p>
-                            <p class="concierge-box__text"><?php echo e($product['short_description'] ?: '24/7 premium dəstək daxildir.'); ?></p>
+                            <p class="concierge-box__text"><?php echo e(maxhomeProductPlainText((string) ($product['short_description'] ?: '24/7 premium dəstək daxildir.'))); ?></p>
                         </div>
                     </div>
                 </div>
@@ -446,8 +523,8 @@ if (count($bundleProductsDisplay) > 1) {
                     </div>
                 </section>
                 <?php if (!empty($product['description'])): ?>
-                    <div style="margin-top:16px; opacity:0.9; line-height:1.7;">
-                        <?php echo nl2br(e((string) $product['description'])); ?>
+                    <div class="product-rich-text product-description-content">
+                        <?php echo maxhomeRenderProductHtml((string) $product['description']); ?>
                     </div>
                 <?php endif; ?>
             </div>
@@ -538,22 +615,208 @@ if (count($bundleProductsDisplay) > 1) {
     (() => {
         const mainImage = document.getElementById('product-main-image');
         const thumbsWrap = document.getElementById('product-gallery-thumbs');
-        if (!mainImage || !thumbsWrap) return;
+        const prevBtn = document.getElementById('product-gallery-prev');
+        const nextBtn = document.getElementById('product-gallery-next');
+        const dotsWrap = document.getElementById('product-gallery-dots');
+        const countLabel = document.getElementById('product-gallery-count');
+        const galleryMain = document.getElementById('product-gallery-main');
+        const lightbox = document.getElementById('gallery-lightbox');
+        const lightboxImage = document.getElementById('gallery-lightbox-image');
+        const lightboxClose = document.getElementById('gallery-lightbox-close');
+        const lightboxBackdrop = document.getElementById('gallery-lightbox-backdrop');
+        const lightboxPrev = document.getElementById('gallery-lightbox-prev');
+        const lightboxNext = document.getElementById('gallery-lightbox-next');
+        const lightboxCount = document.getElementById('gallery-lightbox-count');
 
-        const thumbs = Array.from(thumbsWrap.querySelectorAll('.gallery__thumb'));
-        if (thumbs.length === 0) return;
+        if (!mainImage || !galleryMain) {
+            return;
+        }
+
+        const thumbs = thumbsWrap ? Array.from(thumbsWrap.querySelectorAll('.gallery__thumb')) : [];
+        const galleryItems = thumbs.length > 0
+            ? thumbs.map((thumb) => ({
+                src: thumb.getAttribute('data-image-src') || '',
+                alt: thumb.getAttribute('data-image-alt') || ''
+            }))
+            : [{
+                src: mainImage.getAttribute('src') || '',
+                alt: mainImage.getAttribute('alt') || ''
+            }];
+
+        const dots = dotsWrap ? Array.from(dotsWrap.querySelectorAll('.gallery__dot')) : [];
+        let currentIndex = 0;
+        let lastFocusedElement = null;
+
+        function setActiveIndex(index) {
+            const total = galleryItems.length;
+            if (total === 0) {
+                return;
+            }
+
+            currentIndex = (index + total) % total;
+            const item = galleryItems[currentIndex];
+            if (!item.src) {
+                return;
+            }
+
+            mainImage.setAttribute('src', item.src);
+            mainImage.setAttribute('alt', item.alt);
+
+            thumbs.forEach((thumb, itemIndex) => {
+                thumb.classList.toggle('gallery__thumb--active', itemIndex === currentIndex);
+            });
+
+            dots.forEach((dot, dotIndex) => {
+                const isActive = dotIndex === currentIndex;
+                dot.classList.toggle('gallery__dot--active', isActive);
+                if (isActive) {
+                    dot.setAttribute('aria-current', 'true');
+                } else {
+                    dot.removeAttribute('aria-current');
+                }
+            });
+
+            const countText = (currentIndex + 1) + ' / ' + total;
+            if (countLabel) {
+                countLabel.textContent = countText;
+            }
+            if (lightboxImage && lightbox && !lightbox.hidden) {
+                lightboxImage.setAttribute('src', item.src);
+                lightboxImage.setAttribute('alt', item.alt);
+            }
+            if (lightboxCount) {
+                lightboxCount.textContent = countText;
+            }
+        }
+
+        function isControlTarget(target) {
+            return !!target.closest('.gallery__nav, .gallery__dot, .gallery__pagination, button');
+        }
+
+        function openLightbox() {
+            if (!lightbox || !lightboxImage) {
+                return;
+            }
+
+            const item = galleryItems[currentIndex];
+            lightboxImage.setAttribute('src', item.src);
+            lightboxImage.setAttribute('alt', item.alt);
+            if (lightboxCount && galleryItems.length > 1) {
+                lightboxCount.textContent = (currentIndex + 1) + ' / ' + galleryItems.length;
+            }
+
+            lastFocusedElement = document.activeElement;
+            lightbox.hidden = false;
+            lightbox.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('gallery-lightbox-open');
+
+            if (lightboxClose) {
+                lightboxClose.focus();
+            }
+        }
+
+        function closeLightbox() {
+            if (!lightbox) {
+                return;
+            }
+
+            lightbox.hidden = true;
+            lightbox.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('gallery-lightbox-open');
+
+            if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+                lastFocusedElement.focus();
+            }
+        }
 
         thumbs.forEach((thumb) => {
             thumb.addEventListener('click', () => {
-                const nextSrc = thumb.getAttribute('data-image-src') || '';
-                const nextAlt = thumb.getAttribute('data-image-alt') || '';
-                if (!nextSrc) return;
-
-                mainImage.setAttribute('src', nextSrc);
-                mainImage.setAttribute('alt', nextAlt);
-                thumbs.forEach((t) => t.classList.remove('gallery__thumb--active'));
-                thumb.classList.add('gallery__thumb--active');
+                const index = Number(thumb.getAttribute('data-gallery-index') || '0');
+                setActiveIndex(index);
             });
+        });
+
+        dots.forEach((dot) => {
+            dot.addEventListener('click', () => {
+                const index = Number(dot.getAttribute('data-gallery-index') || '0');
+                setActiveIndex(index);
+            });
+        });
+
+        if (prevBtn) {
+            prevBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                setActiveIndex(currentIndex - 1);
+            });
+        }
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                setActiveIndex(currentIndex + 1);
+            });
+        }
+
+        galleryMain.addEventListener('click', (event) => {
+            if (isControlTarget(event.target)) {
+                return;
+            }
+            openLightbox();
+        });
+
+        galleryMain.addEventListener('keydown', (event) => {
+            if (lightbox && !lightbox.hidden) {
+                return;
+            }
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openLightbox();
+                return;
+            }
+            if (galleryItems.length <= 1) {
+                return;
+            }
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                setActiveIndex(currentIndex - 1);
+            } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                setActiveIndex(currentIndex + 1);
+            }
+        });
+
+        if (lightboxClose) {
+            lightboxClose.addEventListener('click', closeLightbox);
+        }
+        if (lightboxBackdrop) {
+            lightboxBackdrop.addEventListener('click', closeLightbox);
+        }
+        if (lightboxPrev) {
+            lightboxPrev.addEventListener('click', (event) => {
+                event.stopPropagation();
+                setActiveIndex(currentIndex - 1);
+            });
+        }
+        if (lightboxNext) {
+            lightboxNext.addEventListener('click', (event) => {
+                event.stopPropagation();
+                setActiveIndex(currentIndex + 1);
+            });
+        }
+
+        document.addEventListener('keydown', (event) => {
+            if (!lightbox || lightbox.hidden) {
+                return;
+            }
+            if (event.key === 'Escape') {
+                closeLightbox();
+            } else if (event.key === 'ArrowLeft' && galleryItems.length > 1) {
+                event.preventDefault();
+                setActiveIndex(currentIndex - 1);
+            } else if (event.key === 'ArrowRight' && galleryItems.length > 1) {
+                event.preventDefault();
+                setActiveIndex(currentIndex + 1);
+            }
         });
     })();
     </script>

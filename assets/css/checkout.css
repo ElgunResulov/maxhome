@@ -3,7 +3,7 @@
     --primary-container: #003366;
     --primary-fixed: #d5e3ff;
     --on-primary: #ffffff;
-    --secondary: #525f75;
+    --secondary: #3d4858;
     --secondary-container: #d6e3fe;
     --on-secondary: #ffffff;
     --tertiary: #381300;
@@ -15,8 +15,8 @@
     --surface-container-high: #e8e8e8;
     --surface-variant: #e2e2e2;
     --on-surface: #1a1c1c;
-    --on-surface-variant: #43474f;
-    --outline: #737780;
+    --on-surface-variant: #2f343c;
+    --outline: #5a616b;
     --outline-variant: #c3c6d1;
     --error: #ba1a1a;
     --background: #f9f9f9;
@@ -335,7 +335,7 @@ h4,
 }
 
 .text-input::placeholder {
-    color: #94a3b8;
+    color: #3f4853;
 }
 
 /* Payment Methods */
@@ -668,7 +668,7 @@ h4,
 
 .footer-tagline {
     font-size: 0.875rem;
-    color: #64748b;
+    color: #3f4853;
     line-height: 1.6;
     max-width: 15rem;
 }
@@ -696,7 +696,7 @@ h4,
 
 .footer-link {
     font-size: 0.875rem;
-    color: #64748b;
+    color: #3f4853;
     text-decoration: none;
     transition: color 0.2s;
 }
@@ -707,7 +707,7 @@ h4,
 
 .newsletter-desc {
     font-size: 0.75rem;
-    color: #64748b;
+    color: #3f4853;
     margin-bottom: 1rem;
 }
 
@@ -743,7 +743,7 @@ h4,
 
 .copyright-text {
     font-size: 0.75rem;
-    color: #94a3b8;
+    color: #3f4853;
 }
 
 .hidden-mobile {

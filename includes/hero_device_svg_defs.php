@@ -25,3 +25,6 @@ $heroSvgId = 'heroSvg' . $heroSvgDefSeq;
         <feMergeNode in="SourceGraphic" />
     </feMerge>
 </filter>
+<clipPath id="<?php echo $heroSvgId; ?>-product-clip">
+    <rect x="104" y="22" width="312" height="308" rx="30" ry="30" />
+</clipPath>

@@ -110,7 +110,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    color: #8a94a3;
+    color: #3f4853;
     text-decoration: none;
     font-family: 'Inter', sans-serif;
     font-size: 13px;
@@ -124,7 +124,7 @@
 
 .maxhome-mega-menu__left-item .material-symbols-outlined {
     font-size: 19px;
-    color: #a1a9b5;
+    color: #3f4853;
     font-variation-settings: "FILL" 0, "wght" 300, "GRAD" 0, "opsz" 24;
     transition: color 0.14s ease;
 }
@@ -136,7 +136,7 @@
 
 .maxhome-mega-menu__left-item:hover .material-symbols-outlined,
 .maxhome-mega-menu__left-item--active .material-symbols-outlined {
-    color: #6b7280;
+    color: #3f4853;
 }
 
 .maxhome-mega-menu__left-item:hover {
@@ -194,7 +194,7 @@
 .maxhome-mega-menu__alt-alt {
     display: block;
     text-decoration: none;
-    color: #a8b0bc;
+    color: #3f4853;
     font-family: 'Inter', sans-serif;
     font-size: 13px;
     font-weight: 400;
@@ -208,7 +208,7 @@
 
 .maxhome-mega-menu__col a:hover,
 .maxhome-mega-menu__alt-alt:hover {
-    color: #6b7280;
+    color: #3f4853;
     background: transparent;
 }
 
@@ -419,7 +419,7 @@ body.maxhome-mobile-menu-open .maxhome-mobile-drawer {
 
 .maxhome-search-suggest__simple-link .material-symbols-outlined {
     font-size: 16px;
-    color: #c0c7d2;
+    color: #3f4853;
 }
 
 .maxhome-search-suggest__product-row {
@@ -447,7 +447,7 @@ body.maxhome-mobile-menu-open .maxhome-mobile-drawer {
 .maxhome-search-suggest__product-img--placeholder {
     display: grid;
     place-items: center;
-    color: #9ca3af;
+    color: #3f4853;
 }
 
 .maxhome-search-suggest__product-meta {
@@ -457,7 +457,7 @@ body.maxhome-mobile-menu-open .maxhome-mobile-drawer {
 .maxhome-search-suggest__product-cat {
     display: block;
     font-size: 12px;
-    color: #94a3b8;
+    color: #3f4853;
 }
 
 .maxhome-search-suggest__product-name {
@@ -481,7 +481,7 @@ body.maxhome-mobile-menu-open .maxhome-mobile-drawer {
 
 .maxhome-search-suggest__old-price {
     text-decoration: line-through;
-    color: #94a3b8;
+    color: #3f4853;
     font-size: 12px;
 }
 
@@ -492,7 +492,7 @@ body.maxhome-mobile-menu-open .maxhome-mobile-drawer {
 
 .maxhome-search-suggest__empty {
     margin: 0;
-    color: #6b7280;
+    color: #3f4853;
     padding: 6px 0;
 }
 

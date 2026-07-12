@@ -120,11 +120,67 @@ $products = $stmt->fetchAll() ?: [];
     <link rel="stylesheet" href="assets/css/navbar.css">
     <link rel="stylesheet" href="assets/css/warehouse_sales.css">
 </head>
-<body>
+<body class="ws-is-loading">
 <?php include __DIR__ . '/navbar.php'; ?>
 
 <main class="warehouse-page container">
     <section class="ws-panel">
+        <div class="ws-skeleton" aria-hidden="true">
+            <div class="ws-skeleton__header">
+                <div>
+                    <div class="ws-skeleton-block ws-skeleton-block--title"></div>
+                    <div class="ws-skeleton-block ws-skeleton-block--subtitle"></div>
+                </div>
+                <div class="ws-skeleton__actions">
+                    <div class="ws-skeleton-block ws-skeleton-block--btn"></div>
+                    <div class="ws-skeleton-block ws-skeleton-block--btn"></div>
+                </div>
+            </div>
+
+            <div class="ws-skeleton__stats">
+                <?php for ($i = 0; $i < 4; $i++): ?>
+                    <div class="ws-skeleton-stat">
+                        <div class="ws-skeleton-block ws-skeleton-block--stat-label"></div>
+                        <div class="ws-skeleton-block ws-skeleton-block--stat-value"></div>
+                    </div>
+                <?php endfor; ?>
+            </div>
+
+            <div class="ws-skeleton__filters">
+                <div class="ws-skeleton-block ws-skeleton-block--filter"></div>
+                <div class="ws-skeleton-block ws-skeleton-block--filter"></div>
+                <div class="ws-skeleton-block ws-skeleton-block--filter"></div>
+                <div class="ws-skeleton-block ws-skeleton-block--filter-short"></div>
+            </div>
+
+            <div class="ws-skeleton__table-card">
+                <div class="ws-skeleton__table-head">
+                    <div class="ws-skeleton-block ws-skeleton-block--table-title"></div>
+                    <div class="ws-skeleton-block ws-skeleton-block--table-meta"></div>
+                </div>
+                <div class="ws-skeleton__table-rows">
+                    <?php for ($i = 0; $i < 7; $i++): ?>
+                        <div class="ws-skeleton-row">
+                            <div class="ws-skeleton-block ws-skeleton-block--id"></div>
+                            <div class="ws-skeleton-product">
+                                <div class="ws-skeleton-block ws-skeleton-block--thumb"></div>
+                                <div class="ws-skeleton-product__text">
+                                    <div class="ws-skeleton-block ws-skeleton-block--line"></div>
+                                    <div class="ws-skeleton-block ws-skeleton-block--line-short"></div>
+                                </div>
+                            </div>
+                            <div class="ws-skeleton-block ws-skeleton-block--cell"></div>
+                            <div class="ws-skeleton-block ws-skeleton-block--cell-short"></div>
+                            <div class="ws-skeleton-block ws-skeleton-block--badge"></div>
+                            <div class="ws-skeleton-block ws-skeleton-block--cell"></div>
+                            <div class="ws-skeleton-block ws-skeleton-block--actions"></div>
+                        </div>
+                    <?php endfor; ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="ws-content">
         <header class="ws-header">
             <div>
                 <h1>Sifarişlər</h1>
@@ -222,7 +278,7 @@ $products = $stmt->fetchAll() ?: [];
                                         <img src="<?php echo e($image); ?>" alt="<?php echo e((string) ($product['name'] ?? 'Məhsul')); ?>">
                                         <div>
                                             <strong><?php echo e((string) ($product['name'] ?? '')); ?></strong>
-                                            <small><?php echo e((string) ($product['short_description'] ?: 'Satış üçün anbarda mövcuddur.')); ?></small>
+                                            <small><?php echo e(maxhomeProductPlainText((string) ($product['short_description'] ?: 'Satış üçün anbarda mövcuddur.'))); ?></small>
                                         </div>
                                     </div>
                                 </td>
@@ -250,22 +306,49 @@ $products = $stmt->fetchAll() ?: [];
                 </table>
             </div>
         </section>
+        </div>
     </section>
 </main>
 
 <script>
 (function () {
+    var body = document.body;
     var form = document.getElementById('wsFiltersForm');
+
+    function showContent() {
+        body.classList.remove('ws-is-loading');
+    }
+
+    function showSkeleton() {
+        body.classList.add('ws-is-loading');
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', showContent);
+    } else {
+        showContent();
+    }
+
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            showContent();
+        }
+    });
+
     if (!form) {
         return;
     }
+
     var searchInput = form.querySelector('input[name="q"]');
     var selects = form.querySelectorAll('select');
     var debounceTimer = null;
 
     function submitFilters() {
+        showSkeleton();
         form.submit();
     }
+
+    form.addEventListener('submit', showSkeleton);
 
     selects.forEach(function (el) {
         el.addEventListener('change', submitFilters);
