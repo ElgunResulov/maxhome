@@ -1008,16 +1008,12 @@ $products = $productsStmt->fetchAll() ?: [];
                                 <div class="product-card__content">
                                     <div class="product-card__header">
                                         <h3 class="product-card__title"><?php echo e($product['name']); ?></h3>
-                                        <p class="product-card__subtitle"><?php echo e($product['category_name'] ?: 'Ümumi'); ?></p>
                                     </div>
                                     <div class="rating">
                                         <span class="review-count">
                                             Reytinq: <?php echo number_format((float) $product['rating_avg'], 1); ?> (<?php echo (int) $product['rating_count']; ?>)
                                         </span>
                                     </div>
-                                    <p class="product-card__desc">
-                                        <?php echo e(maxhomeProductPlainText((string) ($product['short_description'] ?: 'Premium keyfiyyətli məhsul.'))); ?>
-                                    </p>
                                     <div class="product-card__meta-row">
                                         <a
                                             class="product-card__link"

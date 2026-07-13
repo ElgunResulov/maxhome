@@ -195,19 +195,21 @@ $maxhomeRenderHomeProductCard = static function (array $product): void {
             <?php endif; ?>
             <div class="mh-card__icons">
                 <button
-                    class="mh-card__icon js-product-compare-btn"
+                    class="mh-card__icon mh-card__icon--compare js-product-compare-btn"
                     type="button"
                     aria-label="<?php echo e(t('product.compare')); ?>"
                     data-product-id="<?php echo (int) $product['id']; ?>"
                     data-product-slug="<?php echo e((string) $product['slug']); ?>"
                     data-product-name="<?php echo e((string) $product['name']); ?>">
-                    <span class="material-symbols-outlined">balance</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">balance</span>
                 </button>
                 <button
-                    class="mh-card__icon"
+                    class="mh-card__icon mh-card__icon--wishlist js-product-wishlist-btn"
                     type="button"
-                    aria-label="<?php echo e(t('product.add_wishlist')); ?>">
-                    <span class="material-symbols-outlined">favorite</span>
+                    aria-pressed="false"
+                    aria-label="<?php echo e(t('product.add_wishlist')); ?>"
+                    data-product-id="<?php echo (int) $product['id']; ?>">
+                    <span class="material-symbols-outlined" aria-hidden="true">favorite</span>
                 </button>
             </div>
             <a class="mh-card__img-link" href="product_details.php?slug=<?php echo urlencode((string) $product['slug']); ?>">
@@ -1104,6 +1106,56 @@ unset($slideRow);
         window.addEventListener('resize', updateButtons);
         updateButtons();
     });
+
+    var WISHLIST_KEY = 'maxhome_wishlist_ids';
+
+    function readWishlist() {
+        try {
+            var raw = localStorage.getItem(WISHLIST_KEY);
+            var parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed.map(String) : [];
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function writeWishlist(ids) {
+        localStorage.setItem(WISHLIST_KEY, JSON.stringify(ids));
+    }
+
+    function syncWishlistButtons() {
+        var ids = readWishlist();
+        document.querySelectorAll('.js-product-wishlist-btn').forEach(function (btn) {
+            var id = String(btn.dataset.productId || '');
+            var active = id !== '' && ids.indexOf(id) !== -1;
+            btn.classList.toggle('is-active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        var btn = event.target.closest('.js-product-wishlist-btn');
+        if (!(btn instanceof HTMLElement)) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        var id = String(btn.dataset.productId || '');
+        if (id === '') {
+            return;
+        }
+        var ids = readWishlist();
+        var index = ids.indexOf(id);
+        if (index === -1) {
+            ids.push(id);
+        } else {
+            ids.splice(index, 1);
+        }
+        writeWishlist(ids);
+        syncWishlistButtons();
+    });
+
+    syncWishlistButtons();
 })();
 </script>
 </body>
