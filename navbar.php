@@ -88,6 +88,30 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
         <div class="maxhome-search-suggest" id="maxhome-search-suggest" hidden></div>
     </div>
 </header>
+<nav class="mh-bottom-nav" aria-label="Mobil naviqasiya" data-mh-bottom-nav>
+    <a class="mh-bottom-nav__item <?php echo $currentPage === 'categories' || $currentPage === 'shop page' ? 'is-active' : ''; ?>" href="categories.php">
+        <span class="material-symbols-outlined mh-bottom-nav__icon" aria-hidden="true">grid_view</span>
+        <span class="mh-bottom-nav__label"><?php echo e(t('nav.catalog', 'Kataloq')); ?></span>
+    </a>
+    <a class="mh-bottom-nav__item <?php echo $currentPage === 'wishlist' ? 'is-active' : ''; ?>" href="wishlist.php">
+        <span class="material-symbols-outlined mh-bottom-nav__icon" aria-hidden="true">favorite</span>
+        <span class="mh-bottom-nav__label"><?php echo e(t('nav.wishlist', 'Seçilmişlər')); ?></span>
+    </a>
+    <a class="mh-bottom-nav__item mh-bottom-nav__item--home <?php echo $currentPage === 'home' ? 'is-active' : ''; ?>" href="index.php" aria-label="<?php echo e(t('nav.home')); ?>">
+        <span class="mh-bottom-nav__home">
+            <span class="material-symbols-outlined mh-bottom-nav__home-icon" aria-hidden="true">home</span>
+        </span>
+        <span class="mh-bottom-nav__dot" aria-hidden="true"></span>
+    </a>
+    <a class="mh-bottom-nav__item <?php echo $currentPage === 'cart' ? 'is-active' : ''; ?>" href="shopping_cart.php">
+        <span class="material-symbols-outlined mh-bottom-nav__icon" aria-hidden="true">shopping_cart</span>
+        <span class="mh-bottom-nav__label"><?php echo e(t('nav.cart_short', 'Səbət')); ?></span>
+    </a>
+    <a class="mh-bottom-nav__item <?php echo $currentPage === 'profile' ? 'is-active' : ''; ?>" href="<?php echo isUserLoggedIn() ? 'user_logout.php' : 'user_login.php'; ?>">
+        <span class="material-symbols-outlined mh-bottom-nav__icon" aria-hidden="true">person</span>
+        <span class="mh-bottom-nav__label"><?php echo e(t('nav.profile', 'Profil')); ?></span>
+    </a>
+</nav>
 <script>
 (function () {
     var mega = document.querySelector('.maxhome-navbar__mega');

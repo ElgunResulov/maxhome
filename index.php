@@ -3,6 +3,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/i18n.php';
+require_once __DIR__ . '/includes/mega_menu.php';
 maxhome_start_i18n_buffer();
 
 $pdo = db();
@@ -70,7 +71,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_to_cart'])) {
 $cartFlashMessage = $cartFlashMessage ?? '';
 $cartFlashType = $cartFlashType ?? 'error';
 
-// Ana kateqoriyalar (3 ədəd)
+// Hero sol menyu — əsas kök kateqoriyalar + alt kateqoriyalar
+$sidebarCategories = [];
+$categoryTree = maxhome_mega_menu_panels_load_category_tree($pdo);
+if ($categoryTree !== null) {
+    $byParent = $categoryTree['byParent'];
+    $categoryById = $categoryTree['categoryById'];
+    $hasBrandIdColumn = (bool) $categoryTree['hasBrandIdColumn'];
+    $rootCount = 0;
+    foreach (maxhome_mega_sorted_children($byParent, 0) as $root) {
+        $sortOrder = (int) ($root['sort_order'] ?? 0);
+        if ($sortOrder >= 9000) {
+            continue;
+        }
+        $rootId = (int) ($root['id'] ?? 0);
+        $rootSlug = (string) ($root['slug'] ?? '');
+        if ($rootId <= 0 || $rootSlug === '') {
+            continue;
+        }
+
+        $children = [];
+        foreach (maxhome_mega_sorted_children($byParent, $rootId) as $child) {
+            if (maxhome_mega_is_brand_leaf_category($child, $categoryById, $hasBrandIdColumn)) {
+                continue;
+            }
+            $childSlug = (string) ($child['slug'] ?? '');
+            if ($childSlug === '') {
+                continue;
+            }
+            $children[] = [
+                'name' => (string) ($child['name'] ?? $childSlug),
+                'slug' => $childSlug,
+            ];
+        }
+
+        $sidebarCategories[] = [
+            'id' => $rootId,
+            'name' => (string) ($root['name'] ?? $rootSlug),
+            'slug' => $rootSlug,
+            'children' => $children,
+        ];
+
+        $rootCount++;
+        if ($rootCount >= 12) {
+            break;
+        }
+    }
+} else {
+    $sidebarCategoriesStmt = $pdo->query(
+        "SELECT id, name, slug
+         FROM categories
+         WHERE is_active = 1 AND parent_id IS NULL AND sort_order < 9000
+         ORDER BY sort_order ASC, name ASC
+         LIMIT 12"
+    );
+    $sidebarCategories = $sidebarCategoriesStmt->fetchAll() ?: [];
+    foreach ($sidebarCategories as &$sidebarCatRow) {
+        $sidebarCatRow['children'] = [];
+    }
+    unset($sidebarCatRow);
+}
+
+// Aşağıdakı kateqoriya kartları üçün (3 ədəd)
 $categoriesStmt = $pdo->query(
     "SELECT id, name, slug, description, image_url
      FROM categories
@@ -298,11 +360,14 @@ $homeProductRails = [
     ],
 ];
 
-// Homepage setting: Flash sale config
+// Homepage setting: Flash sale + Həftənin təklifi
 $settingsStmt = $pdo->query(
     "SELECT setting_key, setting_value
      FROM site_settings
-     WHERE setting_key IN ('flash_start_at','flash_end_at','flash_product_id','flash_product_ids','flash_hide_on_expire')"
+     WHERE setting_key IN (
+        'flash_start_at','flash_end_at','flash_product_id','flash_product_ids','flash_hide_on_expire',
+        'weekly_offer_enabled','weekly_offer_product_ids','weekly_offer_end_at','weekly_offer_cta_url','weekly_offer_hide_on_expire'
+     )"
 );
 $settingsRows = $settingsStmt->fetchAll() ?: [];
 $settings = [];
@@ -315,12 +380,24 @@ $flashProductId = (int) ($settings['flash_product_id'] ?? 0);
 $flashProductIdsRaw = (string) ($settings['flash_product_ids'] ?? '');
 $flashHideOnExpire = ($settings['flash_hide_on_expire'] ?? '1') !== '0';
 
+$weeklyOfferEnabled = ($settings['weekly_offer_enabled'] ?? '1') !== '0';
+$weeklyOfferProductIdsRaw = (string) ($settings['weekly_offer_product_ids'] ?? '');
+$weeklyOfferEndAt = (string) ($settings['weekly_offer_end_at'] ?? '');
+$weeklyOfferCtaUrl = trim((string) ($settings['weekly_offer_cta_url'] ?? ''));
+if ($weeklyOfferCtaUrl === '') {
+    $weeklyOfferCtaUrl = 'shop_page.php?sort=price_low';
+}
+$weeklyOfferHideOnExpire = ($settings['weekly_offer_hide_on_expire'] ?? '1') !== '0';
+
 $nowTs = time();
 $startTs = $flashStartAt !== '' ? strtotime($flashStartAt) : false;
 $endTs = $flashEndAt !== '' ? strtotime($flashEndAt) : false;
 $flashWindowConfigured = $startTs !== false && $endTs !== false && $endTs > $startTs;
 $flashIsActive = $flashWindowConfigured && $nowTs >= (int) $startTs && $nowTs < (int) $endTs;
 $flashIsExpired = $flashWindowConfigured && $nowTs >= (int) $endTs;
+
+$weeklyEndTs = $weeklyOfferEndAt !== '' ? strtotime($weeklyOfferEndAt) : false;
+$weeklyOfferIsExpired = $weeklyEndTs !== false && $nowTs >= (int) $weeklyEndTs;
 
 // Flash deal məhsulları: admin seçibsə onları göstər, yoxsa auto seç.
 /** @var list<int> $flashSelectedIds */
@@ -400,6 +477,58 @@ if (!empty($flashSelectedIds)) {
     );
     $flashDeals = $flashStmt->fetchAll() ?: [];
 }
+
+/** @var list<int> $weeklyOfferSelectedIds */
+$weeklyOfferSelectedIds = [];
+if ($weeklyOfferProductIdsRaw !== '') {
+    $parts = preg_split('/[,\s]+/', $weeklyOfferProductIdsRaw) ?: [];
+    foreach ($parts as $part) {
+        $pid = (int) trim((string) $part);
+        if ($pid > 0) {
+            $weeklyOfferSelectedIds[$pid] = $pid;
+        }
+        if (count($weeklyOfferSelectedIds) >= 3) {
+            break;
+        }
+    }
+}
+$weeklyOfferSelectedIds = array_values($weeklyOfferSelectedIds);
+
+/** @var list<array<string, mixed>> $weeklyOfferProducts */
+$weeklyOfferProducts = [];
+if (!empty($weeklyOfferSelectedIds)) {
+    $placeholders = implode(',', array_fill(0, count($weeklyOfferSelectedIds), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT
+            p.id,
+            p.slug,
+            p.name,
+            p.base_price,
+            p.compare_at_price,
+            (SELECT image_url
+             FROM product_images
+             WHERE product_id = p.id
+             ORDER BY is_primary DESC, sort_order ASC, id ASC
+             LIMIT 1) AS image_url
+         FROM products p
+         WHERE p.status = 'active'{$catalogOnlineSql} AND p.id IN ({$placeholders})"
+    );
+    $stmt->execute($weeklyOfferSelectedIds);
+    $rows = $stmt->fetchAll() ?: [];
+    $byId = [];
+    foreach ($rows as $row) {
+        $byId[(int) ($row['id'] ?? 0)] = $row;
+    }
+    foreach ($weeklyOfferSelectedIds as $sid) {
+        if (isset($byId[$sid])) {
+            $weeklyOfferProducts[] = $byId[$sid];
+        }
+    }
+}
+
+$showWeeklyOffer = $weeklyOfferEnabled
+    && !empty($weeklyOfferProducts)
+    && !($weeklyOfferIsExpired && $weeklyOfferHideOnExpire);
 
 // Hero üçün vurğulanan məhsullar (slider üçün)
 $heroStmt = $pdo->query(
@@ -519,151 +648,265 @@ unset($slideRow);
     <?php $currentPage = 'home'; ?>
     <?php include 'navbar.php'; ?>
     <main>
-        <!-- Hero -->
+        <!-- Hero: sol kateqoriya + sağ banner slider -->
         <section class="hero">
-            <div class="hero-slider" data-hero-slider>
-                <div class="hero-slides">
-                    <?php if (!empty($homepageSlides)): ?>
-                        <?php foreach ($homepageSlides as $slideIndex => $slide): ?>
-                            <?php
-                            $badge = (string) ($slide['badge_text'] ?? '');
-                            $title = (string) ($slide['title'] ?? '');
-                            $body = (string) ($slide['body_text'] ?? '');
-                            $primaryLabel = (string) ($slide['primary_label'] ?? '');
-                            $primaryUrl = (string) ($slide['primary_url'] ?? '');
-                            $secondaryLabel = (string) ($slide['secondary_label'] ?? '');
-                            $secondaryUrl = (string) ($slide['secondary_url'] ?? '');
-                            $heroDeviceImg = maxhome_public_asset_url((string) ($slide['image_url'] ?? ''));
-                            ?>
-                            <article class="hero-slide <?php echo $slideIndex === 0 ? 'is-active' : ''; ?>" data-hero-slide>
-                                <div class="hero-container">
-                                    <div class="hero-content">
-                                        <span class="badge"><?php echo e($badge !== '' ? $badge : t('hero.badge')); ?></span>
-                                        <h1 class="hero-title"><?php echo e($title !== '' ? $title : t('hero.fallback_title')); ?></h1>
-                                        <p class="hero-description">
-                                            <?php echo e($body !== '' ? $body : t('hero.fallback_description')); ?>
-                                        </p>
-                                        <div class="btn-group">
-                                            <?php if ($primaryLabel !== '' && $primaryUrl !== ''): ?>
-                                                <a class="btn btn--primary" href="<?php echo e($primaryUrl); ?>">
-                                                    <?php echo e($primaryLabel); ?>
-                                                </a>
-                                            <?php else: ?>
-                                                <a class="btn btn--primary" href="shop_page.php">
-                                                    <?php echo e(t('hero.shop_now')); ?>
-                                                </a>
-                                            <?php endif; ?>
+            <div class="hero-shell">
+                <?php if (!empty($sidebarCategories)): ?>
+                    <aside class="hero-cats" aria-label="<?php echo e(t('categories.title')); ?>">
+                        <ul class="hero-cats__list">
+                            <?php foreach ($sidebarCategories as $sidebarCat): ?>
+                                <?php
+                                $catSlug = (string) ($sidebarCat['slug'] ?? '');
+                                $catName = (string) ($sidebarCat['name'] ?? '');
+                                $catIcon = maxhome_mega_root_icon($catSlug);
+                                $catChildren = $sidebarCat['children'] ?? [];
+                                $hasChildren = is_array($catChildren) && $catChildren !== [];
+                                ?>
+                                <li class="hero-cats__item<?php echo $hasChildren ? ' hero-cats__item--has-panel' : ''; ?>">
+                                    <a
+                                        class="hero-cats__link"
+                                        href="shop_page.php?<?php echo http_build_query(['category_slug' => $catSlug]); ?>"
+                                        <?php if ($hasChildren): ?>
+                                            aria-haspopup="true"
+                                            aria-expanded="false"
+                                        <?php endif; ?>>
+                                        <span class="hero-cats__icon material-symbols-outlined" aria-hidden="true"><?php echo e($catIcon); ?></span>
+                                        <span class="hero-cats__label"><?php echo e($catName); ?></span>
+                                        <?php if ($hasChildren): ?>
+                                            <span class="hero-cats__chev material-symbols-outlined" aria-hidden="true">chevron_right</span>
+                                        <?php endif; ?>
+                                    </a>
+                                    <?php if ($hasChildren): ?>
+                                        <div class="hero-cats__panel" role="region" aria-label="<?php echo e($catName); ?>">
+                                            <ul class="hero-cats__sublist">
+                                                <?php foreach ($catChildren as $childCat): ?>
+                                                    <li>
+                                                        <a
+                                                            class="hero-cats__sublink"
+                                                            href="shop_page.php?<?php echo http_build_query(['category_slug' => (string) ($childCat['slug'] ?? '')]); ?>">
+                                                            <?php echo e((string) ($childCat['name'] ?? '')); ?>
+                                                        </a>
+                                                    </li>
+                                                <?php endforeach; ?>
+                                            </ul>
+                                        </div>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </aside>
+                <?php endif; ?>
+
+                <div class="hero-banner" data-hero-slider>
+                    <div class="hero-slides">
+                        <?php if (!empty($homepageSlides)): ?>
+                            <?php foreach ($homepageSlides as $slideIndex => $slide): ?>
+                                <?php
+                                $badge = (string) ($slide['badge_text'] ?? '');
+                                $title = (string) ($slide['title'] ?? '');
+                                $body = (string) ($slide['body_text'] ?? '');
+                                $primaryLabel = (string) ($slide['primary_label'] ?? '');
+                                $primaryUrl = (string) ($slide['primary_url'] ?? '');
+                                $secondaryLabel = (string) ($slide['secondary_label'] ?? '');
+                                $secondaryUrl = (string) ($slide['secondary_url'] ?? '');
+                                $heroDeviceImg = maxhome_public_asset_url((string) ($slide['image_url'] ?? ''));
+                                $slideHref = $primaryUrl !== '' ? $primaryUrl : 'shop_page.php';
+                                ?>
+                                <article class="hero-slide <?php echo $slideIndex === 0 ? 'is-active' : ''; ?>" data-hero-slide>
+                                    <?php if ($heroDeviceImg !== ''): ?>
+                                        <div
+                                            class="hero-banner__bg"
+                                            style="background-image: url('<?php echo e($heroDeviceImg); ?>');"
+                                            role="img"
+                                            aria-label="<?php echo e($title !== '' ? $title : t('hero.fallback_title')); ?>"></div>
+                                    <?php else: ?>
+                                        <div class="hero-banner__fallback" aria-hidden="true"></div>
+                                    <?php endif; ?>
+                                    <div class="hero-banner__shade"></div>
+                                    <div class="hero-banner__content">
+                                        <?php if ($badge !== ''): ?>
+                                            <span class="hero-banner__badge"><?php echo e($badge); ?></span>
+                                        <?php endif; ?>
+                                        <h1 class="hero-banner__title"><?php echo e($title !== '' ? $title : t('hero.fallback_title')); ?></h1>
+                                        <?php if ($body !== ''): ?>
+                                            <p class="hero-banner__text"><?php echo e($body); ?></p>
+                                        <?php endif; ?>
+                                        <div class="hero-banner__actions">
+                                            <a class="btn btn--primary" href="<?php echo e($slideHref); ?>">
+                                                <?php echo e($primaryLabel !== '' ? $primaryLabel : t('hero.shop_now')); ?>
+                                            </a>
                                             <?php if ($secondaryLabel !== '' && $secondaryUrl !== ''): ?>
-                                                <a class="btn btn--secondary" href="<?php echo e($secondaryUrl); ?>">
+                                                <a class="btn btn--ghost" href="<?php echo e($secondaryUrl); ?>">
                                                     <?php echo e($secondaryLabel); ?>
                                                 </a>
-                                            <?php else: ?>
-                                                <a class="btn btn--secondary" href="shop_page.php?sort=rating">
-                                                    <?php echo e(t('hero.view_deals')); ?>
-                                                </a>
                                             <?php endif; ?>
                                         </div>
                                     </div>
-                                    <div class="hero-visual">
-                                        <div class="visual-wrapper">
-                                            <div class="visual-blob"></div>
-                                            <div class="visual-glass"></div>
-                                            <?php include __DIR__ . '/includes/hero_device_art.php'; ?>
-                                        </div>
-                                    </div>
-                                </div>
-                            </article>
-                        <?php endforeach; ?>
-                    <?php elseif (!empty($heroProducts)): ?>
-                        <?php foreach ($heroProducts as $slideIndex => $heroProduct): ?>
-                            <?php
-                            $heroDeviceImg = maxhome_public_asset_url((string) ($heroProduct['image_url'] ?? ''));
-                            ?>
-                            <article class="hero-slide <?php echo $slideIndex === 0 ? 'is-active' : ''; ?>" data-hero-slide>
-                                <div class="hero-container">
-                                    <div class="hero-content">
-                                        <span class="badge"><?php echo e(t('hero.badge')); ?></span>
-                                        <h1 class="hero-title">
-                                            <?php echo e((string) $heroProduct['name']); ?>
-                                        </h1>
-                                        <p class="hero-description">
+                                </article>
+                            <?php endforeach; ?>
+                        <?php elseif (!empty($heroProducts)): ?>
+                            <?php foreach ($heroProducts as $slideIndex => $heroProduct): ?>
+                                <?php
+                                $heroDeviceImg = maxhome_public_asset_url((string) ($heroProduct['image_url'] ?? ''));
+                                $productHref = 'product_details.php?slug=' . urlencode((string) $heroProduct['slug']);
+                                ?>
+                                <article class="hero-slide <?php echo $slideIndex === 0 ? 'is-active' : ''; ?>" data-hero-slide>
+                                    <?php if ($heroDeviceImg !== ''): ?>
+                                        <div
+                                            class="hero-banner__bg"
+                                            style="background-image: url('<?php echo e($heroDeviceImg); ?>');"
+                                            role="img"
+                                            aria-label="<?php echo e((string) $heroProduct['name']); ?>"></div>
+                                    <?php else: ?>
+                                        <div class="hero-banner__fallback" aria-hidden="true"></div>
+                                    <?php endif; ?>
+                                    <div class="hero-banner__shade"></div>
+                                    <div class="hero-banner__content">
+                                        <span class="hero-banner__badge"><?php echo e(t('hero.badge')); ?></span>
+                                        <h1 class="hero-banner__title"><?php echo e((string) $heroProduct['name']); ?></h1>
+                                        <p class="hero-banner__text">
                                             <?php echo e(maxhomeProductPlainText((string) ($heroProduct['short_description'] ?: t('hero.default_short_description')))); ?>
                                         </p>
-                                        <div class="btn-group">
-                                            <a class="btn btn--primary" href="product_details.php?slug=<?php echo urlencode((string) $heroProduct['slug']); ?>">
+                                        <div class="hero-banner__actions">
+                                            <a class="btn btn--primary" href="<?php echo e($productHref); ?>">
                                                 <?php echo e(t('hero.shop_now')); ?>
                                             </a>
-                                            <a class="btn btn--secondary" href="shop_page.php?sort=rating">
+                                            <a class="btn btn--ghost" href="shop_page.php?sort=rating">
                                                 <?php echo e(t('hero.view_deals')); ?>
                                             </a>
                                         </div>
                                     </div>
-                                    <div class="hero-visual">
-                                        <div class="visual-wrapper">
-                                            <div class="visual-blob"></div>
-                                            <div class="visual-glass"></div>
-                                            <?php include __DIR__ . '/includes/hero_device_art.php'; ?>
-                                        </div>
+                                </article>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <article class="hero-slide is-active" data-hero-slide>
+                                <div class="hero-banner__fallback" aria-hidden="true"></div>
+                                <div class="hero-banner__shade"></div>
+                                <div class="hero-banner__content">
+                                    <span class="hero-banner__badge"><?php echo e(t('hero.badge')); ?></span>
+                                    <h1 class="hero-banner__title"><?php echo t('hero.fallback_title'); ?></h1>
+                                    <p class="hero-banner__text"><?php echo e(t('hero.fallback_description')); ?></p>
+                                    <div class="hero-banner__actions">
+                                        <a class="btn btn--primary" href="shop_page.php"><?php echo e(t('hero.shop_now')); ?></a>
+                                        <a class="btn btn--ghost" href="shop_page.php?sort=rating"><?php echo e(t('hero.view_deals')); ?></a>
                                     </div>
                                 </div>
                             </article>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <?php $heroDeviceImg = ''; ?>
-                        <article class="hero-slide is-active" data-hero-slide>
-                            <div class="hero-container">
-                                <div class="hero-content">
-                                    <span class="badge"><?php echo e(t('hero.badge')); ?></span>
-                                    <h1 class="hero-title"><?php echo t('hero.fallback_title'); ?></h1>
-                                    <p class="hero-description">
-                                        <?php echo e(t('hero.fallback_description')); ?>
-                                    </p>
-                                    <div class="btn-group">
-                                        <a class="btn btn--primary" href="shop_page.php">
-                                            <?php echo e(t('hero.shop_now')); ?>
-                                        </a>
-                                        <a class="btn btn--secondary" href="shop_page.php?sort=rating">
-                                            <?php echo e(t('hero.view_deals')); ?>
-                                        </a>
-                                    </div>
-                                </div>
-                                <div class="hero-visual">
-                                    <div class="visual-wrapper">
-                                        <div class="visual-blob"></div>
-                                        <div class="visual-glass"></div>
-                                        <?php include __DIR__ . '/includes/hero_device_art.php'; ?>
-                                    </div>
-                                </div>
+                        <?php endif; ?>
+                    </div>
+                    <?php
+                    $effectiveSlideCount = !empty($homepageSlides) ? count($homepageSlides) : $heroSlideCount;
+                    ?>
+                    <?php if ($effectiveSlideCount > 1): ?>
+                        <div class="hero-controls" aria-label="Hero slider controls">
+                            <button class="hero-control-btn" type="button" data-hero-prev aria-label="Əvvəlki slayd">
+                                <span class="material-symbols-outlined">chevron_left</span>
+                            </button>
+                            <button class="hero-control-btn" type="button" data-hero-next aria-label="Növbəti slayd">
+                                <span class="material-symbols-outlined">chevron_right</span>
+                            </button>
+                            <div class="hero-dots">
+                                <?php for ($dotIndex = 0; $dotIndex < $effectiveSlideCount; $dotIndex++): ?>
+                                    <button
+                                        class="hero-dot <?php echo $dotIndex === 0 ? 'is-active' : ''; ?>"
+                                        type="button"
+                                        data-hero-dot="<?php echo $dotIndex; ?>"
+                                        aria-label="Slayd <?php echo $dotIndex + 1; ?>"
+                                        aria-current="<?php echo $dotIndex === 0 ? 'true' : 'false'; ?>">
+                                    </button>
+                                <?php endfor; ?>
                             </div>
-                        </article>
+                        </div>
                     <?php endif; ?>
                 </div>
-                <?php
-                $effectiveSlideCount = !empty($homepageSlides) ? count($homepageSlides) : $heroSlideCount;
-                ?>
-                <?php if ($effectiveSlideCount > 1): ?>
-                    <div class="hero-controls" aria-label="Hero slider controls">
-                        <button class="hero-control-btn" type="button" data-hero-prev aria-label="Əvvəlki slayd">
-                            <span class="material-symbols-outlined">chevron_left</span>
-                        </button>
-                        <div class="hero-dots">
-                            <?php for ($dotIndex = 0; $dotIndex < $effectiveSlideCount; $dotIndex++): ?>
-                                <button
-                                    class="hero-dot <?php echo $dotIndex === 0 ? 'is-active' : ''; ?>"
-                                    type="button"
-                                    data-hero-dot="<?php echo $dotIndex; ?>"
-                                    aria-label="Slayd <?php echo $dotIndex + 1; ?>"
-                                    aria-current="<?php echo $dotIndex === 0 ? 'true' : 'false'; ?>">
-                                </button>
-                            <?php endfor; ?>
-                        </div>
-                        <button class="hero-control-btn" type="button" data-hero-next aria-label="Növbəti slayd">
-                            <span class="material-symbols-outlined">chevron_right</span>
-                        </button>
-                    </div>
-                <?php endif; ?>
             </div>
         </section>
+        <?php if ($showWeeklyOffer): ?>
+        <!-- Həftənin Təklifi -->
+        <section
+            class="weekly-offer container"
+            id="weekly-offer"
+            data-hide-on-expire="<?php echo $weeklyOfferHideOnExpire ? '1' : '0'; ?>"
+            data-weekly-expired="<?php echo $weeklyOfferIsExpired ? '1' : '0'; ?>">
+            <div class="weekly-offer__panel">
+                <h2 class="weekly-offer__title">Həftənin Təklifi</h2>
+                <div class="weekly-offer__body">
+                    <div class="weekly-offer__products">
+                        <?php foreach ($weeklyOfferProducts as $offerProduct): ?>
+                            <?php
+                            $offerPrice = (float) $offerProduct['base_price'];
+                            $offerCompare = !empty($offerProduct['compare_at_price']) ? (float) $offerProduct['compare_at_price'] : 0.0;
+                            $offerDiscount = 0;
+                            if ($offerCompare > $offerPrice && $offerCompare > 0) {
+                                $offerDiscount = (int) round((1 - ($offerPrice / $offerCompare)) * 100);
+                            }
+                            $offerName = (string) $offerProduct['name'];
+                            if (function_exists('mb_strlen') && mb_strlen($offerName) > 42) {
+                                $offerName = mb_substr($offerName, 0, 42) . '...';
+                            } elseif (strlen($offerName) > 42) {
+                                $offerName = substr($offerName, 0, 42) . '...';
+                            }
+                            ?>
+                            <a class="weekly-offer__item" href="product_details.php?slug=<?php echo urlencode((string) $offerProduct['slug']); ?>">
+                                <div class="weekly-offer__media">
+                                    <img
+                                        class="weekly-offer__img"
+                                        alt="<?php echo e((string) $offerProduct['name']); ?>"
+                                        src="<?php echo e((string) ($offerProduct['image_url'] ?: 'https://via.placeholder.com/120x120?text=Deal')); ?>"
+                                        width="96"
+                                        height="96"
+                                        loading="lazy" />
+                                    <?php if ($offerDiscount > 0): ?>
+                                        <span class="weekly-offer__badge">-<?php echo $offerDiscount; ?>%</span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="weekly-offer__info">
+                                    <h3 class="weekly-offer__name"><?php echo e($offerName); ?></h3>
+                                    <div class="weekly-offer__prices">
+                                        <?php if ($offerCompare > $offerPrice): ?>
+                                            <span class="weekly-offer__old"><?php echo number_format($offerCompare, 2); ?> ₼</span>
+                                        <?php endif; ?>
+                                        <span class="weekly-offer__price"><?php echo number_format($offerPrice, 2); ?> ₼</span>
+                                    </div>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                    <aside class="weekly-offer__aside">
+                        <div class="weekly-offer__countdown-label">
+                            <span class="material-symbols-outlined weekly-offer__clock" aria-hidden="true">calendar_month</span>
+                            <span>Təklif bitməsinə qalan vaxt:</span>
+                        </div>
+                        <div
+                            class="weekly-offer__countdown"
+                            data-weekly-end="<?php echo e($weeklyOfferEndAt); ?>"
+                            aria-label="Təklif bitməsinə qalan vaxt">
+                            <div class="weekly-offer__unit">
+                                <div class="weekly-offer__num" data-unit="days">00</div>
+                                <div class="weekly-offer__unit-label">Gün</div>
+                            </div>
+                            <span class="weekly-offer__sep" aria-hidden="true">:</span>
+                            <div class="weekly-offer__unit">
+                                <div class="weekly-offer__num" data-unit="hours">00</div>
+                                <div class="weekly-offer__unit-label">Saat</div>
+                            </div>
+                            <span class="weekly-offer__sep" aria-hidden="true">:</span>
+                            <div class="weekly-offer__unit">
+                                <div class="weekly-offer__num" data-unit="minutes">00</div>
+                                <div class="weekly-offer__unit-label">Dəq.</div>
+                            </div>
+                            <span class="weekly-offer__sep" aria-hidden="true">:</span>
+                            <div class="weekly-offer__unit">
+                                <div class="weekly-offer__num" data-unit="seconds">00</div>
+                                <div class="weekly-offer__unit-label">San.</div>
+                            </div>
+                        </div>
+                        <a class="weekly-offer__cta" href="<?php echo e($weeklyOfferCtaUrl); ?>">Bütün təklifləri gör</a>
+                    </aside>
+                </div>
+            </div>
+        </section>
+        <?php endif; ?>
         <!-- Categories -->
         <section class="section-padding container">
             <div class="section-header">
@@ -885,6 +1128,75 @@ unset($slideRow);
                 setInterval(tick, 1000);
             })();
         </script>
+        <?php if ($showWeeklyOffer): ?>
+        <script>
+            (function () {
+                const section = document.getElementById('weekly-offer');
+                const countdown = section && section.querySelector('.weekly-offer__countdown');
+                if (!section || !countdown) return;
+
+                const elDays = countdown.querySelector('[data-unit="days"]');
+                const elHours = countdown.querySelector('[data-unit="hours"]');
+                const elMinutes = countdown.querySelector('[data-unit="minutes"]');
+                const elSeconds = countdown.querySelector('[data-unit="seconds"]');
+                if (!elDays || !elHours || !elMinutes || !elSeconds) return;
+
+                const rawEnd = countdown.getAttribute('data-weekly-end') || '';
+                const hideOnExpire = section.getAttribute('data-hide-on-expire') === '1';
+
+                const pad2 = (n) => String(n).padStart(2, '0');
+
+                const setZeros = () => {
+                    elDays.textContent = '00';
+                    elHours.textContent = '00';
+                    elMinutes.textContent = '00';
+                    elSeconds.textContent = '00';
+                };
+
+                if (!rawEnd) {
+                    setZeros();
+                    return;
+                }
+
+                const end = new Date(rawEnd.replace(' ', 'T'));
+                if (isNaN(end.getTime())) {
+                    setZeros();
+                    return;
+                }
+
+                function tick() {
+                    const now = new Date();
+                    let diff = Math.floor((end.getTime() - now.getTime()) / 1000);
+
+                    if (diff <= 0) {
+                        setZeros();
+                        if (hideOnExpire) {
+                            section.style.display = 'none';
+                        } else {
+                            section.classList.add('is-expired');
+                        }
+                        return;
+                    }
+
+                    section.classList.remove('is-expired');
+                    const days = Math.floor(diff / 86400);
+                    diff -= days * 86400;
+                    const hours = Math.floor(diff / 3600);
+                    diff -= hours * 3600;
+                    const minutes = Math.floor(diff / 60);
+                    const seconds = diff - minutes * 60;
+
+                    elDays.textContent = pad2(days);
+                    elHours.textContent = pad2(hours);
+                    elMinutes.textContent = pad2(minutes);
+                    elSeconds.textContent = pad2(seconds);
+                }
+
+                tick();
+                setInterval(tick, 1000);
+            })();
+        </script>
+        <?php endif; ?>
         <!-- Brands -->
         <section class="brands">
             <div class="container brands-list">
@@ -934,9 +1246,20 @@ unset($slideRow);
             <div class="footer-brand">
                 <h4>MAXHOME</h4>
                 <p><?php echo e(t('footer.brand_text')); ?></p>
-                <div class="footer-social">
-                    <a class="social-link" href="support_center.php"><span class="material-symbols-outlined">public</span></a>
-                    <a class="social-link" href="support_center.php"><span class="material-symbols-outlined">alternate_email</span></a>
+                <div class="footer-social-block">
+                    <h5 class="footer-social-title"><?php echo e(t('footer.social')); ?></h5>
+                    <div class="footer-social">
+                        <a
+                            class="social-link"
+                            href="https://www.instagram.com/maxhome_az/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="<?php echo e(t('footer.instagram')); ?>">
+                            <svg class="social-link__icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+                                <path fill="currentColor" d="M7.8 2h8.4C19.4 2 22 4.6 22 7.8v8.4c0 3.2-2.6 5.8-5.8 5.8H7.8C4.6 22 2 19.4 2 16.2V7.8C2 4.6 4.6 2 7.8 2zm0 2C5.7 4 4 5.7 4 7.8v8.4C4 18.3 5.7 20 7.8 20h8.4c2.1 0 3.8-1.7 3.8-3.8V7.8C20 5.7 18.3 4 16.2 4H7.8zM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm5.5-.9a1.1 1.1 0 1 1 0 2.2 1.1 1.1 0 0 1 0-2.2z"/>
+                            </svg>
+                        </a>
+                    </div>
                 </div>
             </div>
             <div class="footer-col">

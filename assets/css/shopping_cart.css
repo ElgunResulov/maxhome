@@ -181,6 +181,10 @@ body {
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
 
+.cart-item[hidden] {
+    display: none !important;
+}
+
 .cart-item__img-wrapper {
     width: 128px;
     height: 128px;

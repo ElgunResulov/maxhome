@@ -771,54 +771,6 @@ function maxhomeProductPriceDisplay(array $product): array
     ];
 }
 
-/**
- * Taksit müddətlərinə görə faiz faizləri (dəyər üstünə).
- *
- * @return array<int, float>
- */
-function maxhomeProductInstallmentRates(): array
-{
-    return [
-        3 => 14.0,
-        6 => 20.0,
-        9 => 22.0,
-        12 => 27.0,
-    ];
-}
-
-/**
- * Taksit cədvəli üçün 3/6/9/12 ay seçimləri.
- * Hər müddət üçün satış qiymətinə müvafiq faiz əlavə olunur.
- *
- * @return list<array{months: int, initial_payment: float, monthly: float, total: float}>
- */
-function maxhomeProductInstallmentOptions(float $basePrice, ?float $listPrice = null, array $terms = [3, 6, 9, 12]): array
-{
-    if ($basePrice <= 0) {
-        return [];
-    }
-
-    $rates = maxhomeProductInstallmentRates();
-    $options = [];
-    foreach ($terms as $months) {
-        $months = (int) $months;
-        if ($months < 1) {
-            continue;
-        }
-
-        $ratePercent = $rates[$months] ?? 0.0;
-        $total = round($basePrice * (1 + $ratePercent / 100), 2);
-        $options[] = [
-            'months' => $months,
-            'initial_payment' => 0.0,
-            'monthly' => round($total / $months, 2),
-            'total' => $total,
-        ];
-    }
-
-    return $options;
-}
-
 function e(string $value): string
 {
     return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');

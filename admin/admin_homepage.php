@@ -37,127 +37,194 @@ function fetchSettings(PDO $pdo, array $keys): array
     return $map;
 }
 
-$settings = fetchSettings($pdo, ['flash_start_at', 'flash_end_at', 'flash_product_id', 'flash_product_ids', 'flash_hide_on_expire']);
+/**
+ * @return list<int>
+ */
+function parseProductIdList(string $raw, int $max = 0): array
+{
+    $ids = [];
+    if ($raw === '') {
+        return $ids;
+    }
+    $parts = preg_split('/[,\s]+/', $raw) ?: [];
+    foreach ($parts as $part) {
+        $id = (int) trim((string) $part);
+        if ($id > 0) {
+            $ids[$id] = $id;
+        }
+        if ($max > 0 && count($ids) >= $max) {
+            break;
+        }
+    }
+    return array_values($ids);
+}
+
+/**
+ * @param mixed $rawProductIds
+ * @return list<int>
+ */
+function collectPostedProductIds($rawProductIds, int $max = 0): array
+{
+    $productIdList = [];
+    if (!is_array($rawProductIds)) {
+        $rawProductIds = [];
+    }
+    foreach ($rawProductIds as $rawId) {
+        $pid = (int) trim((string) $rawId);
+        if ($pid <= 0) {
+            continue;
+        }
+        $productIdList[$pid] = $pid;
+        if ($max > 0 && count($productIdList) >= $max) {
+            break;
+        }
+    }
+    return array_values($productIdList);
+}
+
+function normalizeDatetimeLocal(string $raw, string $label): ?string
+{
+    $raw = trim($raw);
+    if ($raw === '') {
+        return null;
+    }
+    $normalized = str_replace('T', ' ', $raw);
+    if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $normalized)) {
+        throw new RuntimeException($label . ' formati sehvdir.');
+    }
+    return $normalized . ':00';
+}
+
+function toDatetimeLocalValue(string $dbValue): string
+{
+    if ($dbValue === '') {
+        return '';
+    }
+    return str_replace(' ', 'T', substr($dbValue, 0, 16));
+}
+
+$settingKeys = [
+    'flash_start_at',
+    'flash_end_at',
+    'flash_product_id',
+    'flash_product_ids',
+    'flash_hide_on_expire',
+    'weekly_offer_enabled',
+    'weekly_offer_product_ids',
+    'weekly_offer_end_at',
+    'weekly_offer_cta_url',
+    'weekly_offer_hide_on_expire',
+];
+
+$settings = fetchSettings($pdo, $settingKeys);
+
 $currentFlashStartAt = (string) ($settings['flash_start_at'] ?? '');
 $currentFlashEndAt = (string) ($settings['flash_end_at'] ?? '');
 $currentFlashProductId = (string) ($settings['flash_product_id'] ?? '');
 $currentFlashProductIds = (string) ($settings['flash_product_ids'] ?? '');
 $currentFlashHideOnExpire = (string) ($settings['flash_hide_on_expire'] ?? '1');
 
-/** @var list<int> $selectedFlashProductIds */
-$selectedFlashProductIds = [];
-if ($currentFlashProductIds !== '') {
-    $parts = preg_split('/[,\s]+/', $currentFlashProductIds) ?: [];
-    foreach ($parts as $part) {
-        $id = (int) trim((string) $part);
-        if ($id > 0) {
-            $selectedFlashProductIds[$id] = $id;
-        }
-    }
-}
+$selectedFlashProductIds = parseProductIdList($currentFlashProductIds);
 if (empty($selectedFlashProductIds) && $currentFlashProductId !== '') {
     $legacyId = (int) $currentFlashProductId;
     if ($legacyId > 0) {
-        $selectedFlashProductIds[$legacyId] = $legacyId;
+        $selectedFlashProductIds = [$legacyId];
     }
 }
-// map gibi kullandığımız için key'leri normalize et.
-$selectedFlashProductIds = array_values($selectedFlashProductIds);
+
+$currentWeeklyEnabled = (string) ($settings['weekly_offer_enabled'] ?? '1');
+$currentWeeklyProductIds = (string) ($settings['weekly_offer_product_ids'] ?? '');
+$currentWeeklyEndAt = (string) ($settings['weekly_offer_end_at'] ?? '');
+$currentWeeklyCtaUrl = (string) ($settings['weekly_offer_cta_url'] ?? 'shop_page.php?sort=price_low');
+$currentWeeklyHideOnExpire = (string) ($settings['weekly_offer_hide_on_expire'] ?? '1');
+$selectedWeeklyProductIds = parseProductIdList($currentWeeklyProductIds, 3);
 
 $products = $pdo->query("SELECT p.id, p.name, p.status FROM products p WHERE p.status = 'active'{$catalogOnlineSql} ORDER BY p.id DESC")->fetchAll() ?: [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        $rawStart = trim((string) ($_POST['flash_start_at'] ?? ''));
-        $rawEnd = trim((string) ($_POST['flash_end_at'] ?? ''));
-        $rawProductIds = $_POST['flash_product_ids'] ?? [];
-        $hideOnExpire = isset($_POST['flash_hide_on_expire']) ? '1' : '0';
+        $action = (string) ($_POST['action'] ?? 'save_flash');
 
-        $startValue = null;
-        if ($rawStart !== '') {
-            $normalized = str_replace('T', ' ', $rawStart);
-            if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $normalized)) {
-                throw new RuntimeException('Flash start time formati sehvdir.');
+        if ($action === 'save_weekly_offer') {
+            $rawEnd = (string) ($_POST['weekly_offer_end_at'] ?? '');
+            $rawProductIds = $_POST['weekly_offer_product_ids'] ?? [];
+            $ctaUrl = trim((string) ($_POST['weekly_offer_cta_url'] ?? ''));
+            $enabled = isset($_POST['weekly_offer_enabled']) ? '1' : '0';
+            $hideOnExpire = isset($_POST['weekly_offer_hide_on_expire']) ? '1' : '0';
+
+            $endValue = normalizeDatetimeLocal($rawEnd, 'Həftənin təklifi bitiş vaxtı');
+            $productIdList = collectPostedProductIds($rawProductIds, 3);
+            $productIdsValue = !empty($productIdList) ? implode(',', $productIdList) : null;
+
+            if ($ctaUrl === '') {
+                $ctaUrl = 'shop_page.php?sort=price_low';
             }
-            $startValue = $normalized . ':00';
-        }
 
-        $endValue = null;
-        if ($rawEnd !== '') {
-            $normalized = str_replace('T', ' ', $rawEnd);
-            if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $normalized)) {
-                throw new RuntimeException('Flash end time formati sehvdir.');
+            upsertSetting($pdo, 'weekly_offer_enabled', $enabled);
+            upsertSetting($pdo, 'weekly_offer_product_ids', $productIdsValue);
+            upsertSetting($pdo, 'weekly_offer_end_at', $endValue);
+            upsertSetting($pdo, 'weekly_offer_cta_url', $ctaUrl);
+            upsertSetting($pdo, 'weekly_offer_hide_on_expire', $hideOnExpire);
+
+            $message = 'Həftənin təklifi ayarları yeniləndi.';
+
+            $settings = fetchSettings($pdo, $settingKeys);
+            $currentWeeklyEnabled = (string) ($settings['weekly_offer_enabled'] ?? '1');
+            $currentWeeklyProductIds = (string) ($settings['weekly_offer_product_ids'] ?? '');
+            $currentWeeklyEndAt = (string) ($settings['weekly_offer_end_at'] ?? '');
+            $currentWeeklyCtaUrl = (string) ($settings['weekly_offer_cta_url'] ?? 'shop_page.php?sort=price_low');
+            $currentWeeklyHideOnExpire = (string) ($settings['weekly_offer_hide_on_expire'] ?? '1');
+            $selectedWeeklyProductIds = parseProductIdList($currentWeeklyProductIds, 3);
+        } else {
+            $rawStart = (string) ($_POST['flash_start_at'] ?? '');
+            $rawEnd = (string) ($_POST['flash_end_at'] ?? '');
+            $rawProductIds = $_POST['flash_product_ids'] ?? [];
+            $hideOnExpire = isset($_POST['flash_hide_on_expire']) ? '1' : '0';
+
+            $startValue = normalizeDatetimeLocal($rawStart, 'Flash start time');
+            $endValue = normalizeDatetimeLocal($rawEnd, 'Flash end time');
+
+            $productIdList = collectPostedProductIds($rawProductIds);
+            $productIdsValue = !empty($productIdList) ? implode(',', $productIdList) : null;
+            $productIdValue = !empty($productIdList) ? (string) $productIdList[0] : null;
+
+            if ($startValue !== null && $endValue !== null) {
+                if (strtotime($endValue) <= strtotime($startValue)) {
+                    throw new RuntimeException('Flash end time, start time-dan sonra olmalidir.');
+                }
             }
-            $endValue = $normalized . ':00';
-        }
 
-        $productIdList = [];
-        if (!is_array($rawProductIds)) {
-            $rawProductIds = [];
-        }
-        foreach ($rawProductIds as $rawId) {
-            $pid = (int) trim((string) $rawId);
-            if ($pid <= 0) {
-                continue;
-            }
-            $productIdList[$pid] = $pid;
-        }
-        $productIdList = array_values($productIdList);
-        $productIdsValue = !empty($productIdList) ? implode(',', $productIdList) : null;
-        $productIdValue = !empty($productIdList) ? (string) $productIdList[0] : null; // geri uyumluluk
+            upsertSetting($pdo, 'flash_start_at', $startValue);
+            upsertSetting($pdo, 'flash_end_at', $endValue);
+            upsertSetting($pdo, 'flash_product_id', $productIdValue);
+            upsertSetting($pdo, 'flash_product_ids', $productIdsValue);
+            upsertSetting($pdo, 'flash_hide_on_expire', $hideOnExpire);
+            $message = 'Homepage ayarlari yenilendi.';
 
-        if ($startValue !== null && $endValue !== null) {
-            if (strtotime($endValue) <= strtotime($startValue)) {
-                throw new RuntimeException('Flash end time, start time-dan sonra olmalidir.');
-            }
-        }
+            $settings = fetchSettings($pdo, $settingKeys);
+            $currentFlashStartAt = (string) ($settings['flash_start_at'] ?? '');
+            $currentFlashEndAt = (string) ($settings['flash_end_at'] ?? '');
+            $currentFlashProductId = (string) ($settings['flash_product_id'] ?? '');
+            $currentFlashProductIds = (string) ($settings['flash_product_ids'] ?? '');
+            $currentFlashHideOnExpire = (string) ($settings['flash_hide_on_expire'] ?? '1');
 
-        upsertSetting($pdo, 'flash_start_at', $startValue);
-        upsertSetting($pdo, 'flash_end_at', $endValue);
-        upsertSetting($pdo, 'flash_product_id', $productIdValue);
-        upsertSetting($pdo, 'flash_product_ids', $productIdsValue);
-        upsertSetting($pdo, 'flash_hide_on_expire', $hideOnExpire);
-        $message = 'Homepage ayarlari yenilendi.';
-
-        $settings = fetchSettings($pdo, ['flash_start_at', 'flash_end_at', 'flash_product_id', 'flash_product_ids', 'flash_hide_on_expire']);
-        $currentFlashStartAt = (string) ($settings['flash_start_at'] ?? '');
-        $currentFlashEndAt = (string) ($settings['flash_end_at'] ?? '');
-        $currentFlashProductId = (string) ($settings['flash_product_id'] ?? '');
-        $currentFlashProductIds = (string) ($settings['flash_product_ids'] ?? '');
-        $currentFlashHideOnExpire = (string) ($settings['flash_hide_on_expire'] ?? '1');
-
-        $selectedFlashProductIds = [];
-        if ($currentFlashProductIds !== '') {
-            $parts = preg_split('/[,\s]+/', $currentFlashProductIds) ?: [];
-            foreach ($parts as $part) {
-                $id = (int) trim((string) $part);
-                if ($id > 0) {
-                    $selectedFlashProductIds[$id] = $id;
+            $selectedFlashProductIds = parseProductIdList($currentFlashProductIds);
+            if (empty($selectedFlashProductIds) && $currentFlashProductId !== '') {
+                $legacyId = (int) $currentFlashProductId;
+                if ($legacyId > 0) {
+                    $selectedFlashProductIds = [$legacyId];
                 }
             }
         }
-        if (empty($selectedFlashProductIds) && $currentFlashProductId !== '') {
-            $legacyId = (int) $currentFlashProductId;
-            if ($legacyId > 0) {
-                $selectedFlashProductIds[$legacyId] = $legacyId;
-            }
-        }
-        $selectedFlashProductIds = array_values($selectedFlashProductIds);
     } catch (Throwable $e) {
         $message = $e->getMessage();
         $messageType = 'error';
     }
 }
 
-// Convert to datetime-local value if present
-$dtLocalStart = '';
-$dtLocalEnd = '';
-if ($currentFlashStartAt !== '') {
-    $dtLocalStart = str_replace(' ', 'T', substr($currentFlashStartAt, 0, 16));
-}
-if ($currentFlashEndAt !== '') {
-    $dtLocalEnd = str_replace(' ', 'T', substr($currentFlashEndAt, 0, 16));
-}
+$dtLocalStart = toDatetimeLocalValue($currentFlashStartAt);
+$dtLocalEnd = toDatetimeLocalValue($currentFlashEndAt);
+$dtWeeklyEnd = toDatetimeLocalValue($currentWeeklyEndAt);
 ?>
 <!DOCTYPE html>
 <html lang="az">
@@ -175,7 +242,7 @@ if ($currentFlashEndAt !== '') {
         <header class="admin-top">
             <div>
                 <h1 class="admin-title">Homepage ayarlari</h1>
-                <p class="admin-subtitle">Anasəhifədəki Flash Sale sayğacı kimi hissələr buradan idarə olunur.</p>
+                <p class="admin-subtitle">Anasəhifədəki Flash Sale və Həftənin Təklifi hissələri buradan idarə olunur.</p>
             </div>
         </header>
 
@@ -186,8 +253,65 @@ if ($currentFlashEndAt !== '') {
         <?php endif; ?>
 
         <section class="card">
+            <h3 class="section-title">Həftənin Təklifi</h3>
+            <p class="admin-subtitle" style="margin-bottom:12px;">
+                Hero bannerın altında görünən 3 məhsulluq kampaniya bloku. Maksimum 3 məhsul seçin.
+            </p>
+            <form method="post">
+                <input type="hidden" name="action" value="save_weekly_offer">
+                <div class="form-grid">
+                    <div style="grid-column: 1 / -1;">
+                        <label style="display:flex; align-items:center; gap:8px; font-weight:500;">
+                            <input type="checkbox" name="weekly_offer_enabled" value="1" style="width:auto;" <?php echo $currentWeeklyEnabled !== '0' ? 'checked' : ''; ?>>
+                            Həftənin Təklifi blokunu göstər
+                        </label>
+                    </div>
+                    <div class="flash-picker" style="grid-column: 1 / -1;">
+                        <label for="weekly_offer_product_ids">Təklif məhsulları (maks. 3)</label>
+                        <input
+                            id="weekly_offer_product_search"
+                            type="search"
+                            class="flash-picker__search"
+                            placeholder="Məhsul axtar: ad və ya ID yaz..."
+                            autocomplete="off"
+                        >
+                        <select id="weekly_offer_product_ids" name="weekly_offer_product_ids[]" multiple size="10" class="flash-picker__select">
+                            <?php foreach ($products as $p): ?>
+                                <?php $pid = (int) $p['id']; ?>
+                                <option value="<?php echo $pid; ?>" <?php echo in_array($pid, $selectedWeeklyProductIds, true) ? 'selected' : ''; ?>>
+                                    #<?php echo (int) $p['id']; ?> - <?php echo e((string) $p['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div id="weekly_offer_product_search_empty" class="flash-picker__empty" hidden>Axtarışa uyğun məhsul tapılmadı.</div>
+                        <div class="flash-picker__meta">
+                            <small class="flash-picker__hint">Ctrl/Cmd ilə seç. Maksimum 3 məhsul saxlanılacaq.</small>
+                            <span class="flash-picker__count" id="weekly_selected_count"></span>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="weekly_offer_end_at">Təklif bitiş vaxtı</label>
+                        <input id="weekly_offer_end_at" name="weekly_offer_end_at" type="datetime-local" value="<?php echo e($dtWeeklyEnd); ?>">
+                    </div>
+                    <div>
+                        <label for="weekly_offer_cta_url">"Bütün təklifləri gör" linki</label>
+                        <input id="weekly_offer_cta_url" name="weekly_offer_cta_url" type="text" value="<?php echo e($currentWeeklyCtaUrl); ?>" placeholder="shop_page.php?sort=price_low">
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label style="display:flex; align-items:center; gap:8px; font-weight:500;">
+                            <input type="checkbox" name="weekly_offer_hide_on_expire" value="1" style="width:auto;" <?php echo $currentWeeklyHideOnExpire !== '0' ? 'checked' : ''; ?>>
+                            Bitəndə hissəni gizlət
+                        </label>
+                    </div>
+                </div>
+                <button class="btn btn-primary" type="submit" style="margin-top:12px;">Yadda saxla</button>
+            </form>
+        </section>
+
+        <section class="card">
             <h3 class="section-title">Flash Sale countdown</h3>
             <form method="post">
+                <input type="hidden" name="action" value="save_flash">
                 <div class="form-grid">
                     <div class="flash-picker" style="grid-column: 1 / -1;">
                         <label for="flash_product_ids">Flash məhsulları (bir neçəsini seç)</label>
@@ -240,40 +364,75 @@ if ($currentFlashEndAt !== '') {
 </div>
 <script>
 (() => {
-    const select = document.getElementById('flash_product_ids');
-    const search = document.getElementById('flash_product_search');
-    const emptyState = document.getElementById('flash_product_search_empty');
-    const counter = document.getElementById('flash_selected_count');
-    if (!select || !counter) return;
+    const bindProductPicker = ({ selectId, searchId, emptyId, counterId, maxSelected = 0 }) => {
+        const select = document.getElementById(selectId);
+        const search = document.getElementById(searchId);
+        const emptyState = document.getElementById(emptyId);
+        const counter = document.getElementById(counterId);
+        if (!select || !counter) return;
 
-    const syncCount = () => {
-        const selected = Array.from(select.selectedOptions).length;
-        counter.textContent = selected > 0 ? `${selected} məhsul seçilib` : 'Auto seçim aktivdir';
-    };
+        const syncCount = () => {
+            const selected = Array.from(select.selectedOptions).length;
+            if (maxSelected > 0) {
+                counter.textContent = selected > 0
+                    ? `${selected} / ${maxSelected} məhsul seçilib`
+                    : `Maksimum ${maxSelected} məhsul`;
+                return;
+            }
+            counter.textContent = selected > 0 ? `${selected} məhsul seçilib` : 'Auto seçim aktivdir';
+        };
 
-    const applyFilter = () => {
-        if (!search) return;
-        const q = search.value.trim().toLowerCase();
-        let visible = 0;
-        Array.from(select.options).forEach((opt) => {
-            const text = (opt.textContent || '').toLowerCase();
-            const matches = q === '' || text.includes(q);
-            opt.hidden = !matches;
-            if (matches) visible++;
-        });
-        if (emptyState) {
-            emptyState.hidden = visible > 0;
+        const applyFilter = () => {
+            if (!search) return;
+            const q = search.value.trim().toLowerCase();
+            let visible = 0;
+            Array.from(select.options).forEach((opt) => {
+                const text = (opt.textContent || '').toLowerCase();
+                const matches = q === '' || text.includes(q);
+                opt.hidden = !matches;
+                if (matches) visible++;
+            });
+            if (emptyState) {
+                emptyState.hidden = visible > 0;
+            }
+        };
+
+        if (maxSelected > 0) {
+            select.addEventListener('change', () => {
+                const selected = Array.from(select.selectedOptions);
+                if (selected.length > maxSelected) {
+                    selected.slice(maxSelected).forEach((opt) => {
+                        opt.selected = false;
+                    });
+                }
+                syncCount();
+            });
+        } else {
+            select.addEventListener('change', syncCount);
         }
+
+        if (search) {
+            search.addEventListener('input', applyFilter);
+        }
+        applyFilter();
+        syncCount();
     };
 
-    select.addEventListener('change', syncCount);
-    if (search) {
-        search.addEventListener('input', applyFilter);
-    }
-    applyFilter();
-    syncCount();
+    bindProductPicker({
+        selectId: 'weekly_offer_product_ids',
+        searchId: 'weekly_offer_product_search',
+        emptyId: 'weekly_offer_product_search_empty',
+        counterId: 'weekly_selected_count',
+        maxSelected: 3,
+    });
+
+    bindProductPicker({
+        selectId: 'flash_product_ids',
+        searchId: 'flash_product_search',
+        emptyId: 'flash_product_search_empty',
+        counterId: 'flash_selected_count',
+    });
 })();
 </script>
 </body>
 </html>
-
