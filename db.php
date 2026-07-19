@@ -1,5 +1,4 @@
-<?php
-declare(strict_types=1);
+<?php declare(strict_types=1);
 require_once __DIR__ . '/includes/i18n.php';
 
 if (session_status() === PHP_SESSION_NONE) {

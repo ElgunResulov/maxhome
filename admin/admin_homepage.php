@@ -114,6 +114,14 @@ $settingKeys = [
     'weekly_offer_end_at',
     'weekly_offer_cta_url',
     'weekly_offer_hide_on_expire',
+    'home_rail_robot_title',
+    'home_rail_robot_product_ids',
+    'home_rail_robot_category_slug',
+    'home_rail_bestsellers_title',
+    'home_rail_bestsellers_product_ids',
+    'home_rail_ac_title',
+    'home_rail_ac_product_ids',
+    'home_rail_ac_category_slug',
 ];
 
 $settings = fetchSettings($pdo, $settingKeys);
@@ -139,13 +147,73 @@ $currentWeeklyCtaUrl = (string) ($settings['weekly_offer_cta_url'] ?? 'shop_page
 $currentWeeklyHideOnExpire = (string) ($settings['weekly_offer_hide_on_expire'] ?? '1');
 $selectedWeeklyProductIds = parseProductIdList($currentWeeklyProductIds, 3);
 
+$homeRailsAdmin = [
+    'robot' => [
+        'label' => 'Robot Tozsoranlar',
+        'hint' => 'Boş buraxsanız kateqoriya slug-ına görə avtomatik doldurulur.',
+        'title' => (string) ($settings['home_rail_robot_title'] ?? ''),
+        'product_ids' => parseProductIdList((string) ($settings['home_rail_robot_product_ids'] ?? ''), 12),
+        'category_slug' => (string) ($settings['home_rail_robot_category_slug'] ?? 'robot-tozsoranlar'),
+        'has_slug' => true,
+        'default_title' => 'Robot Tozsoranlar',
+        'default_slug' => 'robot-tozsoranlar',
+    ],
+    'bestsellers' => [
+        'label' => 'Ən çox satılanlar',
+        'hint' => 'Boş buraxsanız ən çox satılan məhsullar avtomatik gəlir.',
+        'title' => (string) ($settings['home_rail_bestsellers_title'] ?? ''),
+        'product_ids' => parseProductIdList((string) ($settings['home_rail_bestsellers_product_ids'] ?? ''), 12),
+        'category_slug' => '',
+        'has_slug' => false,
+        'default_title' => 'Ən çox satılanlar',
+        'default_slug' => '',
+    ],
+    'ac' => [
+        'label' => 'Evinizə uyğun sərinlik',
+        'hint' => 'Boş buraxsanız kateqoriya slug-ına görə avtomatik doldurulur.',
+        'title' => (string) ($settings['home_rail_ac_title'] ?? ''),
+        'product_ids' => parseProductIdList((string) ($settings['home_rail_ac_product_ids'] ?? ''), 12),
+        'category_slug' => (string) ($settings['home_rail_ac_category_slug'] ?? 'kondisionerler'),
+        'has_slug' => true,
+        'default_title' => 'Evinizə uyğun sərinlik',
+        'default_slug' => 'kondisionerler',
+    ],
+];
+
 $products = $pdo->query("SELECT p.id, p.name, p.status FROM products p WHERE p.status = 'active'{$catalogOnlineSql} ORDER BY p.id DESC")->fetchAll() ?: [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $action = (string) ($_POST['action'] ?? 'save_flash');
 
-        if ($action === 'save_weekly_offer') {
+        if ($action === 'save_home_rails') {
+            $railKeys = ['robot', 'bestsellers', 'ac'];
+            foreach ($railKeys as $railKey) {
+                $title = trim((string) ($_POST['home_rail_' . $railKey . '_title'] ?? ''));
+                $productIdList = collectPostedProductIds($_POST['home_rail_' . $railKey . '_product_ids'] ?? [], 12);
+                $productIdsValue = !empty($productIdList) ? implode(',', $productIdList) : null;
+                upsertSetting($pdo, 'home_rail_' . $railKey . '_title', $title !== '' ? $title : null);
+                upsertSetting($pdo, 'home_rail_' . $railKey . '_product_ids', $productIdsValue);
+
+                if ($railKey === 'bestsellers') {
+                    continue;
+                }
+                $slug = trim((string) ($_POST['home_rail_' . $railKey . '_category_slug'] ?? ''));
+                $defaultSlug = $railKey === 'robot' ? 'robot-tozsoranlar' : 'kondisionerler';
+                upsertSetting($pdo, 'home_rail_' . $railKey . '_category_slug', $slug !== '' ? $slug : $defaultSlug);
+            }
+
+            $message = 'Ana səhifə məhsul sıraları yeniləndi.';
+            $settings = fetchSettings($pdo, $settingKeys);
+            foreach ($homeRailsAdmin as $railKey => &$railCfg) {
+                $railCfg['title'] = (string) ($settings['home_rail_' . $railKey . '_title'] ?? '');
+                $railCfg['product_ids'] = parseProductIdList((string) ($settings['home_rail_' . $railKey . '_product_ids'] ?? ''), 12);
+                if ($railCfg['has_slug']) {
+                    $railCfg['category_slug'] = (string) ($settings['home_rail_' . $railKey . '_category_slug'] ?? $railCfg['default_slug']);
+                }
+            }
+            unset($railCfg);
+        } elseif ($action === 'save_weekly_offer') {
             $rawEnd = (string) ($_POST['weekly_offer_end_at'] ?? '');
             $rawProductIds = $_POST['weekly_offer_product_ids'] ?? [];
             $ctaUrl = trim((string) ($_POST['weekly_offer_cta_url'] ?? ''));
@@ -242,7 +310,7 @@ $dtWeeklyEnd = toDatetimeLocalValue($currentWeeklyEndAt);
         <header class="admin-top">
             <div>
                 <h1 class="admin-title">Homepage ayarlari</h1>
-                <p class="admin-subtitle">Anasəhifədəki Flash Sale və Həftənin Təklifi hissələri buradan idarə olunur.</p>
+                <p class="admin-subtitle">Anasəhifədəki Flash Sale, Həftənin Təklifi və məhsul sıraları buradan idarə olunur.</p>
             </div>
         </header>
 
@@ -251,6 +319,74 @@ $dtWeeklyEnd = toDatetimeLocalValue($currentWeeklyEndAt);
                 <?php echo e($message); ?>
             </div>
         <?php endif; ?>
+
+        <section class="card">
+            <h3 class="section-title">Ana səhifə məhsul sıraları</h3>
+            <p class="admin-subtitle" style="margin-bottom:12px;">
+                Robot tozsoranlar, ən çox satılanlar və kondisioner sıralarının başlığını və məhsullarını buradan dəyişin.
+                Məhsul seçməsəniz sistem avtomatik doldurur.
+            </p>
+            <form method="post">
+                <input type="hidden" name="action" value="save_home_rails">
+                <?php foreach ($homeRailsAdmin as $railKey => $railCfg): ?>
+                    <div class="card" style="margin-bottom:14px; box-shadow:none; border:1px solid #e5e7eb;">
+                        <h4 class="section-title" style="margin-bottom:8px;"><?php echo e((string) $railCfg['label']); ?></h4>
+                        <p class="admin-subtitle" style="margin-bottom:12px;"><?php echo e((string) $railCfg['hint']); ?></p>
+                        <div class="form-grid">
+                            <div>
+                                <label for="home_rail_<?php echo e($railKey); ?>_title">Başlıq</label>
+                                <input
+                                    id="home_rail_<?php echo e($railKey); ?>_title"
+                                    name="home_rail_<?php echo e($railKey); ?>_title"
+                                    type="text"
+                                    value="<?php echo e((string) $railCfg['title']); ?>"
+                                    placeholder="<?php echo e((string) $railCfg['default_title']); ?>">
+                            </div>
+                            <?php if (!empty($railCfg['has_slug'])): ?>
+                                <div>
+                                    <label for="home_rail_<?php echo e($railKey); ?>_category_slug">Avto kateqoriya slug</label>
+                                    <input
+                                        id="home_rail_<?php echo e($railKey); ?>_category_slug"
+                                        name="home_rail_<?php echo e($railKey); ?>_category_slug"
+                                        type="text"
+                                        value="<?php echo e((string) $railCfg['category_slug']); ?>"
+                                        placeholder="<?php echo e((string) $railCfg['default_slug']); ?>">
+                                </div>
+                            <?php endif; ?>
+                            <div class="flash-picker" style="grid-column: 1 / -1;">
+                                <label for="home_rail_<?php echo e($railKey); ?>_product_ids">Məhsullar (maks. 12)</label>
+                                <input
+                                    id="home_rail_<?php echo e($railKey); ?>_product_search"
+                                    type="search"
+                                    class="flash-picker__search"
+                                    placeholder="Məhsul axtar: ad və ya ID yaz..."
+                                    autocomplete="off"
+                                >
+                                <select
+                                    id="home_rail_<?php echo e($railKey); ?>_product_ids"
+                                    name="home_rail_<?php echo e($railKey); ?>_product_ids[]"
+                                    multiple
+                                    size="8"
+                                    class="flash-picker__select">
+                                    <?php foreach ($products as $p): ?>
+                                        <?php $pid = (int) $p['id']; ?>
+                                        <option value="<?php echo $pid; ?>" <?php echo in_array($pid, $railCfg['product_ids'], true) ? 'selected' : ''; ?>>
+                                            #<?php echo $pid; ?> - <?php echo e((string) $p['name']); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <div id="home_rail_<?php echo e($railKey); ?>_product_search_empty" class="flash-picker__empty" hidden>Axtarışa uyğun məhsul tapılmadı.</div>
+                                <div class="flash-picker__meta">
+                                    <small class="flash-picker__hint">Ctrl/Cmd ilə seç. Seçim sırası saxlanılacaq.</small>
+                                    <span class="flash-picker__count" id="home_rail_<?php echo e($railKey); ?>_selected_count"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                <button class="btn btn-primary" type="submit">Sıraları yadda saxla</button>
+            </form>
+        </section>
 
         <section class="card">
             <h3 class="section-title">Həftənin Təklifi</h3>
@@ -431,6 +567,16 @@ $dtWeeklyEnd = toDatetimeLocalValue($currentWeeklyEndAt);
         searchId: 'flash_product_search',
         emptyId: 'flash_product_search_empty',
         counterId: 'flash_selected_count',
+    });
+
+    ['robot', 'bestsellers', 'ac'].forEach((railKey) => {
+        bindProductPicker({
+            selectId: 'home_rail_' + railKey + '_product_ids',
+            searchId: 'home_rail_' + railKey + '_product_search',
+            emptyId: 'home_rail_' + railKey + '_product_search_empty',
+            counterId: 'home_rail_' + railKey + '_selected_count',
+            maxSelected: 12,
+        });
     });
 })();
 </script>

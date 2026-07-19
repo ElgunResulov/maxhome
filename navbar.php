@@ -28,14 +28,46 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
             <?php endif; ?>
         </div>
 
+        <div class="maxhome-navbar__search" data-mh-search>
+            <button
+                class="maxhome-navbar__cats-btn"
+                type="button"
+                aria-label="<?php echo e(t('nav.catalog', 'Kataloq')); ?>"
+                aria-expanded="false"
+                aria-controls="hero-cats"
+                data-mh-cats-toggle>
+                <span class="material-symbols-outlined" aria-hidden="true">grid_view</span>
+            </button>
+            <div class="maxhome-navbar__search-wrap">
+                <form class="maxhome-navbar__search-form" action="shop_page.php" method="get" role="search">
+                    <span class="maxhome-navbar__search-sparkle" aria-hidden="true">
+                        <span class="material-symbols-outlined">auto_awesome</span>
+                    </span>
+                    <input
+                        class="maxhome-navbar__search-input"
+                        id="maxhome-search-input"
+                        type="search"
+                        name="q"
+                        value="<?php echo e($searchQuery); ?>"
+                        placeholder="<?php echo e(t('nav.search_placeholder', 'Məhsul axtar...')); ?>"
+                        autocomplete="off"
+                        aria-label="<?php echo e(t('nav.search')); ?>"
+                        aria-controls="maxhome-search-suggest"
+                        aria-autocomplete="list" />
+                    <span class="maxhome-navbar__search-divider" aria-hidden="true"></span>
+                    <button class="maxhome-navbar__search-submit" type="submit" aria-label="<?php echo e(t('nav.search')); ?>">
+                        <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    </button>
+                </form>
+                <div class="maxhome-search-suggest" id="maxhome-search-suggest" hidden></div>
+            </div>
+        </div>
+
         <div class="maxhome-navbar__actions">
             <div class="maxhome-lang-switch" role="group" aria-label="<?php echo e(t('nav.language')); ?>">
                 <a class="maxhome-lang-switch__item <?php echo $lang === 'az' ? 'maxhome-lang-switch__item--active' : ''; ?>" href="<?php echo e(maxhome_lang_url('az')); ?>"><?php echo e(t('lang.az')); ?></a>
                 <a class="maxhome-lang-switch__item <?php echo $lang === 'en' ? 'maxhome-lang-switch__item--active' : ''; ?>" href="<?php echo e(maxhome_lang_url('en')); ?>"><?php echo e(t('lang.en')); ?></a>
             </div>
-            <button class="maxhome-icon-btn maxhome-search-toggle" type="button" aria-label="<?php echo e(t('nav.search')); ?>" aria-expanded="false" aria-controls="maxhome-search-panel">
-                <span class="material-symbols-outlined">search</span>
-            </button>
             <a class="maxhome-icon-btn" href="shopping_cart.php" aria-label="<?php echo e(t('nav.cart')); ?>">
                 <span class="material-symbols-outlined">shopping_cart</span>
             </a>
@@ -74,19 +106,6 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
             <?php endif; ?>
         </nav>
     </aside>
-    <div class="maxhome-search-panel" id="maxhome-search-panel" hidden>
-        <form class="maxhome-search-panel__form" action="shop_page.php" method="get" role="search">
-            <input
-                class="maxhome-search-panel__input"
-                type="search"
-                name="q"
-                value="<?php echo e($searchQuery); ?>"
-                placeholder="<?php echo e(t('nav.search')); ?>..."
-                autocomplete="off" />
-            <button class="maxhome-search-panel__submit" type="submit"><?php echo e(t('nav.search')); ?></button>
-        </form>
-        <div class="maxhome-search-suggest" id="maxhome-search-suggest" hidden></div>
-    </div>
 </header>
 <nav class="mh-bottom-nav" aria-label="Mobil naviqasiya" data-mh-bottom-nav>
     <a class="mh-bottom-nav__item <?php echo $currentPage === 'categories' || $currentPage === 'shop page' ? 'is-active' : ''; ?>" href="categories.php">
@@ -179,13 +198,110 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
         });
     }
 
-    var searchToggle = document.querySelector('.maxhome-search-toggle');
-    var searchPanel = document.getElementById('maxhome-search-panel');
+    var catsToggle = document.querySelector('[data-mh-cats-toggle]');
+
+    function getHeroCats() {
+        return document.getElementById('hero-cats');
+    }
+
+    function isMobileCatsViewport() {
+        return window.matchMedia('(max-width: 991px)').matches;
+    }
+
+    function setHeroCatsOpen(isOpen) {
+        if (!catsToggle) {
+            return;
+        }
+        var heroCats = getHeroCats();
+        if (!heroCats) {
+            if (isOpen) {
+                window.location.href = 'index.php?cats=open';
+            }
+            return;
+        }
+        if (!isMobileCatsViewport()) {
+            heroCats.classList.remove('is-open');
+            heroCats.style.display = '';
+            heroCats.setAttribute('aria-hidden', 'false');
+            catsToggle.setAttribute('aria-expanded', 'false');
+            return;
+        }
+        heroCats.classList.toggle('is-open', isOpen);
+        heroCats.style.display = isOpen ? 'block' : 'none';
+        heroCats.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        catsToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        if (isOpen) {
+            heroCats.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+
+    if (catsToggle) {
+        catsToggle.addEventListener('click', function (event) {
+            event.stopPropagation();
+            if (!isMobileCatsViewport()) {
+                return;
+            }
+            var heroCats = getHeroCats();
+            var willOpen = !heroCats || !heroCats.classList.contains('is-open');
+            setHeroCatsOpen(willOpen);
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        if (!isMobileCatsViewport()) {
+            return;
+        }
+        var heroCats = getHeroCats();
+        if (!heroCats || !heroCats.classList.contains('is-open')) {
+            return;
+        }
+        if (heroCats.contains(event.target) || (catsToggle && catsToggle.contains(event.target))) {
+            return;
+        }
+        setHeroCatsOpen(false);
+    });
+
+    function syncHeroCatsForViewport() {
+        var heroCats = getHeroCats();
+        if (!heroCats) {
+            return;
+        }
+        if (!isMobileCatsViewport()) {
+            heroCats.classList.remove('is-open');
+            heroCats.style.display = '';
+            heroCats.setAttribute('aria-hidden', 'false');
+            if (catsToggle) {
+                catsToggle.setAttribute('aria-expanded', 'false');
+            }
+            return;
+        }
+        if (!heroCats.classList.contains('is-open')) {
+            heroCats.style.display = 'none';
+            heroCats.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        syncHeroCatsForViewport();
+        var catsParam = new URLSearchParams(window.location.search).get('cats');
+        if (catsParam === 'open' && isMobileCatsViewport()) {
+            setHeroCatsOpen(true);
+        }
+    });
+    if (document.readyState !== 'loading') {
+        syncHeroCatsForViewport();
+        if (new URLSearchParams(window.location.search).get('cats') === 'open' && isMobileCatsViewport()) {
+            setHeroCatsOpen(true);
+        }
+    }
+    window.addEventListener('resize', syncHeroCatsForViewport);
+
+    var searchRoot = document.querySelector('[data-mh-search]');
+    var searchInput = document.getElementById('maxhome-search-input');
     var suggestBox = document.getElementById('maxhome-search-suggest');
-    if (!searchToggle || !searchPanel) {
+    if (!searchRoot || !searchInput) {
         return;
     }
-    var searchInput = searchPanel.querySelector('.maxhome-search-panel__input');
     var debounceTimer = null;
     var currentController = null;
 
@@ -203,6 +319,14 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
         return num.toFixed(2) + '\u202f' + '₼';
     }
 
+    function hideSuggestions() {
+        if (!suggestBox) {
+            return;
+        }
+        suggestBox.hidden = true;
+        suggestBox.innerHTML = '';
+    }
+
     function renderSuggestions(data) {
         if (!suggestBox) {
             return;
@@ -212,8 +336,7 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
         var products = Array.isArray(data.products) ? data.products : [];
         var empty = popular.length === 0 && categories.length === 0 && products.length === 0;
         if (empty) {
-            suggestBox.hidden = true;
-            suggestBox.innerHTML = '';
+            hideSuggestions();
             return;
         }
 
@@ -281,8 +404,7 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
         }
         var cleanQuery = String(query || '').trim();
         if (cleanQuery.length === 0) {
-            suggestBox.hidden = true;
-            suggestBox.innerHTML = '';
+            hideSuggestions();
             if (currentController) {
                 currentController.abort();
             }
@@ -297,59 +419,52 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
             .then(function (response) { return response.ok ? response.json() : null; })
             .then(function (data) {
                 if (!data || data.ok !== true) {
-                    suggestBox.hidden = true;
+                    hideSuggestions();
                     return;
                 }
                 renderSuggestions(data);
             })
             .catch(function () {
-                suggestBox.hidden = true;
+                hideSuggestions();
             });
     }
 
-    function setSearchOpen(isOpen) {
-        searchPanel.hidden = !isOpen;
-        searchToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        if (isOpen && searchInput) {
-            searchInput.focus();
-            loadSuggestions(searchInput.value || '');
-        } else if (suggestBox) {
-            suggestBox.hidden = true;
-            suggestBox.innerHTML = '';
-        }
-    }
-
-    searchToggle.addEventListener('click', function () {
-        var willOpen = searchPanel.hidden;
-        setSearchOpen(willOpen);
-    });
-
     document.addEventListener('click', function (event) {
-        if (searchPanel.hidden) {
+        if (!suggestBox || suggestBox.hidden) {
             return;
         }
-        if (searchPanel.contains(event.target) || searchToggle.contains(event.target)) {
+        if (searchRoot.contains(event.target)) {
             return;
         }
-        setSearchOpen(false);
+        hideSuggestions();
     });
 
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && document.body.classList.contains('maxhome-mobile-menu-open')) {
             setMenuOpen(false);
         }
-        if (event.key === 'Escape' && !searchPanel.hidden) {
-            setSearchOpen(false);
+        if (event.key === 'Escape') {
+            var openCats = getHeroCats();
+            if (openCats && openCats.classList.contains('is-open')) {
+                setHeroCatsOpen(false);
+            }
+        }
+        if (event.key === 'Escape' && suggestBox && !suggestBox.hidden) {
+            hideSuggestions();
         }
     });
 
-    if (searchInput) {
-        searchInput.addEventListener('input', function () {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(function () {
-                loadSuggestions(searchInput.value || '');
-            }, 220);
-        });
-    }
+    searchInput.addEventListener('input', function () {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function () {
+            loadSuggestions(searchInput.value || '');
+        }, 220);
+    });
+
+    searchInput.addEventListener('focus', function () {
+        if (String(searchInput.value || '').trim().length > 0) {
+            loadSuggestions(searchInput.value || '');
+        }
+    });
 })();
 </script>

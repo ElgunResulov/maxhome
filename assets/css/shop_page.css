@@ -516,20 +516,20 @@ h3,
 
 .shop-skeleton-grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
     align-items: stretch;
 }
 
 @media (min-width: 768px) {
     .shop-skeleton-grid {
-        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
     }
 }
 
 @media (min-width: 1280px) {
     .shop-skeleton-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 
@@ -600,20 +600,20 @@ h3,
 
 .product-grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
     align-items: stretch;
 }
 
 @media (min-width: 768px) {
     .product-grid {
-        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
     }
 }
 
 @media (min-width: 1280px) {
     .product-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 
@@ -1099,5 +1099,87 @@ h3,
 
     .footer__grid {
         padding-inline: var(--container-pad);
+    }
+
+    /* Telefon: 2 kart / row — kompakt kart */
+    .product-card__image-box {
+        height: 9.5rem;
+        padding: 0.75rem;
+    }
+
+    .shop-skeleton-block--image {
+        height: 9.5rem;
+    }
+
+    .product-card__content {
+        padding: 0.75rem;
+    }
+
+    .product-card__header {
+        min-height: 2.4rem;
+        margin-bottom: 0.2rem;
+    }
+
+    .product-card__title {
+        font-size: 0.8125rem;
+        min-height: 2.4em;
+        line-height: 1.25;
+    }
+
+    .product-card__meta-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.35rem;
+        margin-top: 0.35rem;
+    }
+
+    .product-card__price-block {
+        align-items: flex-start;
+        text-align: left;
+        margin-left: 0;
+        min-height: 0;
+    }
+
+    .product-card__price {
+        font-size: 0.9375rem;
+    }
+
+    .product-card__price--sale {
+        font-size: 1rem;
+    }
+
+    .product-card__price-compare {
+        font-size: 0.6875rem;
+    }
+
+    .product-card__link {
+        font-size: 0.75rem;
+    }
+
+    .product-card__cart-form {
+        padding-top: 0.5rem;
+    }
+
+    .btn-add {
+        padding: 0.55rem 0.4rem;
+        font-size: 0.6875rem;
+        gap: 0.25rem;
+        border-radius: 0.4rem;
+    }
+
+    .btn-add .material-symbols-outlined {
+        font-size: 12px !important;
+    }
+
+    .badge {
+        top: 0.5rem;
+        left: 0.5rem;
+        font-size: 0.625rem;
+        padding: 0.2rem 0.4rem;
+    }
+
+    .review-count {
+        font-size: 9px;
+        margin-left: 0;
     }
 }

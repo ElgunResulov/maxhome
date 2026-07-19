@@ -193,46 +193,160 @@ $maxhomeFetchByCategorySlug = static function (PDO $pdo, string $slug, int $limi
     return $stmt->fetchAll() ?: [];
 };
 
-// Trending məhsullar - en çox satanlar (order_items əsasında TOP 12).
-$trendingStmt = $pdo->query(
-    "SELECT
-        {$maxhomeProductSelectSql},
-        COALESCE(SUM(oi.quantity), 0) AS sold_qty
-     FROM products p
-     LEFT JOIN order_items oi ON oi.product_id = p.id
-     WHERE p.status = 'active'{$catalogOnlineSql}
-     GROUP BY p.id, p.slug, p.name, p.short_description, p.base_price, p.compare_at_price, p.stock_qty, p.rating_avg, p.rating_count
-     HAVING sold_qty > 0
-     ORDER BY sold_qty DESC, p.rating_avg DESC, p.id DESC
-     LIMIT 12"
-);
-$trendingProducts = $trendingStmt->fetchAll() ?: [];
-
-if (count($trendingProducts) < 12) {
-    $needed = 12 - count($trendingProducts);
-    $existingIds = array_column($trendingProducts, 'id');
-    $notInClause = '';
-    if (!empty($existingIds)) {
-        $safeIds = array_map('intval', $existingIds);
-        $notInClause = 'AND p.id NOT IN (' . implode(',', $safeIds) . ')';
+/**
+ * @param list<int> $ids
+ * @return list<array<string, mixed>>
+ */
+$maxhomeFetchProductsByIds = static function (PDO $pdo, array $ids, string $catalogOnlineSql, string $selectSql): array {
+    $safeIds = [];
+    foreach ($ids as $id) {
+        $id = (int) $id;
+        if ($id > 0) {
+            $safeIds[$id] = $id;
+        }
+    }
+    $safeIds = array_values($safeIds);
+    if ($safeIds === []) {
+        return [];
     }
 
-    $fallbackSql = "
-        SELECT
-            {$maxhomeProductSelectSql},
-            0 AS sold_qty
-        FROM products p
-        WHERE p.status = 'active'{$catalogOnlineSql} {$notInClause}
-        ORDER BY p.created_at DESC, p.rating_avg DESC, p.id DESC
-        LIMIT {$needed}
-    ";
-    $fallbackStmt = $pdo->query($fallbackSql);
-    $fallbackProducts = $fallbackStmt->fetchAll() ?: [];
-    $trendingProducts = array_merge($trendingProducts, $fallbackProducts);
+    $placeholders = implode(',', array_fill(0, count($safeIds), '?'));
+    $stmt = $pdo->prepare(
+        "SELECT {$selectSql}
+         FROM products p
+         WHERE p.status = 'active'{$catalogOnlineSql} AND p.id IN ({$placeholders})"
+    );
+    $stmt->execute($safeIds);
+    $rows = $stmt->fetchAll() ?: [];
+    $byId = [];
+    foreach ($rows as $row) {
+        $byId[(int) ($row['id'] ?? 0)] = $row;
+    }
+
+    $ordered = [];
+    foreach ($safeIds as $id) {
+        if (isset($byId[$id])) {
+            $ordered[] = $byId[$id];
+        }
+    }
+    return $ordered;
+};
+
+/**
+ * @return list<int>
+ */
+$maxhomeParseIdList = static function (string $raw, int $max = 12): array {
+    $ids = [];
+    if (trim($raw) === '') {
+        return $ids;
+    }
+    $parts = preg_split('/[,\s]+/', $raw) ?: [];
+    foreach ($parts as $part) {
+        $id = (int) trim((string) $part);
+        if ($id > 0) {
+            $ids[$id] = $id;
+        }
+        if ($max > 0 && count($ids) >= $max) {
+            break;
+        }
+    }
+    return array_values($ids);
+};
+
+$railSettingsStmt = $pdo->query(
+    "SELECT setting_key, setting_value
+     FROM site_settings
+     WHERE setting_key IN (
+        'home_rail_robot_title','home_rail_robot_product_ids','home_rail_robot_category_slug',
+        'home_rail_bestsellers_title','home_rail_bestsellers_product_ids',
+        'home_rail_ac_title','home_rail_ac_product_ids','home_rail_ac_category_slug'
+     )"
+);
+$railSettingsRows = $railSettingsStmt->fetchAll() ?: [];
+$railSettings = [];
+foreach ($railSettingsRows as $railSettingsRow) {
+    $railSettings[(string) $railSettingsRow['setting_key']] = (string) ($railSettingsRow['setting_value'] ?? '');
 }
 
-$robotVacuumProducts = $maxhomeFetchByCategorySlug($pdo, 'robot-tozsoranlar', 12, $catalogOnlineSql, $maxhomeProductSelectSql);
-$airConditionerProducts = $maxhomeFetchByCategorySlug($pdo, 'kondisionerler', 12, $catalogOnlineSql, $maxhomeProductSelectSql);
+$robotRailIds = $maxhomeParseIdList((string) ($railSettings['home_rail_robot_product_ids'] ?? ''), 12);
+$bestsellersRailIds = $maxhomeParseIdList((string) ($railSettings['home_rail_bestsellers_product_ids'] ?? ''), 12);
+$acRailIds = $maxhomeParseIdList((string) ($railSettings['home_rail_ac_product_ids'] ?? ''), 12);
+
+$robotRailSlug = trim((string) ($railSettings['home_rail_robot_category_slug'] ?? ''));
+if ($robotRailSlug === '') {
+    $robotRailSlug = 'robot-tozsoranlar';
+}
+$acRailSlug = trim((string) ($railSettings['home_rail_ac_category_slug'] ?? ''));
+if ($acRailSlug === '') {
+    $acRailSlug = 'kondisionerler';
+}
+
+$robotRailTitle = trim((string) ($railSettings['home_rail_robot_title'] ?? ''));
+if ($robotRailTitle === '') {
+    $robotRailTitle = t('home.rail_robot', 'Robot Tozsoranlar');
+}
+$bestsellersRailTitle = trim((string) ($railSettings['home_rail_bestsellers_title'] ?? ''));
+if ($bestsellersRailTitle === '') {
+    $bestsellersRailTitle = t('home.rail_bestsellers', 'Ən çox satılanlar');
+}
+$acRailTitle = trim((string) ($railSettings['home_rail_ac_title'] ?? ''));
+if ($acRailTitle === '') {
+    $acRailTitle = t('home.rail_ac', 'Evinizə uyğun sərinlik');
+}
+
+if ($robotRailIds !== []) {
+    $robotVacuumProducts = $maxhomeFetchProductsByIds($pdo, $robotRailIds, $catalogOnlineSql, $maxhomeProductSelectSql);
+} else {
+    $robotVacuumProducts = $maxhomeFetchByCategorySlug($pdo, $robotRailSlug, 12, $catalogOnlineSql, $maxhomeProductSelectSql);
+}
+
+if ($acRailIds !== []) {
+    $airConditionerProducts = $maxhomeFetchProductsByIds($pdo, $acRailIds, $catalogOnlineSql, $maxhomeProductSelectSql);
+} else {
+    $airConditionerProducts = $maxhomeFetchByCategorySlug($pdo, $acRailSlug, 12, $catalogOnlineSql, $maxhomeProductSelectSql);
+}
+
+if ($bestsellersRailIds !== []) {
+    $trendingProducts = $maxhomeFetchProductsByIds($pdo, $bestsellersRailIds, $catalogOnlineSql, $maxhomeProductSelectSql);
+} else {
+    // Trending məhsullar - en çox satanlar (order_items əsasında TOP 12).
+    $trendingStmt = $pdo->query(
+        "SELECT
+            {$maxhomeProductSelectSql},
+            COALESCE(SUM(oi.quantity), 0) AS sold_qty
+         FROM products p
+         LEFT JOIN order_items oi ON oi.product_id = p.id
+         WHERE p.status = 'active'{$catalogOnlineSql}
+         GROUP BY p.id, p.slug, p.name, p.short_description, p.base_price, p.compare_at_price, p.stock_qty, p.rating_avg, p.rating_count
+         HAVING sold_qty > 0
+         ORDER BY sold_qty DESC, p.rating_avg DESC, p.id DESC
+         LIMIT 12"
+    );
+    $trendingProducts = $trendingStmt->fetchAll() ?: [];
+
+    if (count($trendingProducts) < 12) {
+        $needed = 12 - count($trendingProducts);
+        $existingIds = array_column($trendingProducts, 'id');
+        $notInClause = '';
+        if (!empty($existingIds)) {
+            $safeIds = array_map('intval', $existingIds);
+            $notInClause = 'AND p.id NOT IN (' . implode(',', $safeIds) . ')';
+        }
+
+        $fallbackSql = "
+            SELECT
+                {$maxhomeProductSelectSql},
+                0 AS sold_qty
+            FROM products p
+            WHERE p.status = 'active'{$catalogOnlineSql} {$notInClause}
+            ORDER BY p.created_at DESC, p.rating_avg DESC, p.id DESC
+            LIMIT {$needed}
+        ";
+        $fallbackStmt = $pdo->query($fallbackSql);
+        $fallbackProducts = $fallbackStmt->fetchAll() ?: [];
+        $trendingProducts = array_merge($trendingProducts, $fallbackProducts);
+    }
+}
 
 /**
  * Ana səhifə məhsul kartını render edir.
@@ -347,15 +461,15 @@ $maxhomeRenderHomeRail = static function (string $title, array $products, callab
 
 $homeProductRails = [
     [
-        'title' => t('home.rail_robot', 'Robot Tozsoranlar'),
+        'title' => $robotRailTitle,
         'products' => $robotVacuumProducts,
     ],
     [
-        'title' => t('home.rail_bestsellers', 'Ən çox satılanlar'),
+        'title' => $bestsellersRailTitle,
         'products' => $trendingProducts,
     ],
     [
-        'title' => t('home.rail_ac', 'Evinizə uyğun sərinlik'),
+        'title' => $acRailTitle,
         'products' => $airConditionerProducts,
     ],
 ];
@@ -652,7 +766,7 @@ unset($slideRow);
         <section class="hero">
             <div class="hero-shell">
                 <?php if (!empty($sidebarCategories)): ?>
-                    <aside class="hero-cats" aria-label="<?php echo e(t('categories.title')); ?>">
+                    <aside class="hero-cats" id="hero-cats" aria-label="<?php echo e(t('categories.title')); ?>" aria-hidden="true">
                         <ul class="hero-cats__list">
                             <?php foreach ($sidebarCategories as $sidebarCat): ?>
                                 <?php
@@ -1309,6 +1423,60 @@ unset($slideRow);
             <p class="copyright">© 2024 <?php echo e(t('footer.copy')); ?></p>
         </div>
     </footer>
+<script>
+    (function () {
+        var root = document.getElementById('hero-cats');
+        if (!root) {
+            return;
+        }
+
+        var items = Array.from(root.querySelectorAll('.hero-cats__item--has-panel'));
+
+        function closeAll(exceptItem) {
+            items.forEach(function (item) {
+                if (exceptItem && item === exceptItem) {
+                    return;
+                }
+                item.classList.remove('is-open');
+                var link = item.querySelector('.hero-cats__link');
+                if (link) {
+                    link.setAttribute('aria-expanded', 'false');
+                }
+            });
+        }
+
+        items.forEach(function (item) {
+            var link = item.querySelector('.hero-cats__link');
+            if (!link) {
+                return;
+            }
+            link.addEventListener('click', function (event) {
+                var useClickToggle = window.matchMedia('(max-width: 991px), (hover: none)').matches;
+                if (!useClickToggle) {
+                    return;
+                }
+                var isOpen = item.classList.contains('is-open');
+                event.preventDefault();
+                closeAll(item);
+                item.classList.toggle('is-open', !isOpen);
+                link.setAttribute('aria-expanded', !isOpen ? 'true' : 'false');
+            });
+        });
+
+        document.addEventListener('click', function (event) {
+            if (root.contains(event.target)) {
+                return;
+            }
+            closeAll();
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') {
+                closeAll();
+            }
+        });
+    })();
+</script>
 <script>
     (function() {
         const slider = document.querySelector('[data-hero-slider]');
