@@ -309,6 +309,7 @@ $rawMinPrice = trim((string) ($_GET['min_price'] ?? ''));
 $rawMaxPrice = trim((string) ($_GET['max_price'] ?? ''));
 $minPrice = ($rawMinPrice !== '' && is_numeric($rawMinPrice)) ? (float) $rawMinPrice : null;
 $maxPrice = ($rawMaxPrice !== '' && is_numeric($rawMaxPrice)) ? (float) $rawMaxPrice : null;
+$onlyDiscounted = isset($_GET['discounted']) && (string) $_GET['discounted'] === '1';
 
 $allowedSortValues = ['newest', 'price_low', 'price_high', 'rating'];
 $sortRaw = trim((string) ($_GET['sort'] ?? 'newest'));
@@ -390,11 +391,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET)) {
     if ($sort !== 'newest') {
         $clean['sort'] = $sort;
     }
+    if ($onlyDiscounted) {
+        $clean['discounted'] = '1';
+    }
     if ($page > 1) {
         $clean['page'] = (string) $page;
     }
 
-    $filterQueryKeys = ['brand', 'category_slug', 'root_slug', 'group_slug', 'child_slug', 'category', 'min_price', 'max_price', 'sort', 'page'];
+    $filterQueryKeys = ['brand', 'category_slug', 'root_slug', 'group_slug', 'child_slug', 'category', 'min_price', 'max_price', 'sort', 'discounted', 'page'];
     $current = [];
     foreach ($filterQueryKeys as $key) {
         if (!isset($_GET[$key])) {
@@ -415,6 +419,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET)) {
             continue;
         }
         if ($key === 'sort' && $trimmed === 'newest') {
+            continue;
+        }
+        if ($key === 'discounted' && $trimmed !== '1') {
             continue;
         }
         if ($key === 'page') {
@@ -751,6 +758,9 @@ if ($maxPrice !== null && $maxPrice >= 0) {
     $whereSql .= " AND p.base_price <= :max_price";
     $params['max_price'] = $maxPrice;
 }
+if ($onlyDiscounted) {
+    $whereSql .= " AND p.compare_at_price IS NOT NULL AND p.compare_at_price > p.base_price";
+}
 if ($minPrice !== null && $maxPrice !== null && $minPrice > $maxPrice) {
     $tmp = $minPrice;
     $minPrice = $maxPrice;
@@ -794,6 +804,9 @@ if ($maxPrice !== null && $maxPrice >= 0) {
 }
 if ($sort !== 'newest') {
     $shopPaginationQuery['sort'] = $sort;
+}
+if ($onlyDiscounted) {
+    $shopPaginationQuery['discounted'] = '1';
 }
 
 $shopPaginationUrl = static function (array $baseQuery, int $targetPage): string {
@@ -871,10 +884,84 @@ $products = $productsStmt->fetchAll() ?: [];
             </div>
         <?php endif; ?>
 
-        <div class="shop-layout">
-            <aside class="sidebar">
-                <form method="get" id="filter_form" class="filter-form">
+        <div class="shop-filter-bar" id="shop_filter_bar" role="toolbar" aria-label="Məhsul filtrləri">
+            <div class="shop-filter-bar__scroll">
+                <div class="shop-filter-chip-wrap">
+                    <button type="button" class="shop-filter-chip shop-filter-chip--icon" id="shop_sort_chip" aria-expanded="false" aria-controls="shop_sort_popover" title="Sırala">
+                        <span class="material-symbols-outlined" aria-hidden="true">swap_vert</span>
+                    </button>
+                    <div class="shop-filter-popover" id="shop_sort_popover" hidden>
+                        <div class="shop-filter-popover__title">Sırala</div>
+                        <button type="button" class="shop-filter-popover__item<?php echo $sort === 'newest' ? ' is-active' : ''; ?>" data-sort-value="newest">Ən yenilər</button>
+                        <button type="button" class="shop-filter-popover__item<?php echo $sort === 'price_low' ? ' is-active' : ''; ?>" data-sort-value="price_low">Qiymət: Aşağıdan yuxarı</button>
+                        <button type="button" class="shop-filter-popover__item<?php echo $sort === 'price_high' ? ' is-active' : ''; ?>" data-sort-value="price_high">Qiymət: Yuxarıdan aşağı</button>
+                        <button type="button" class="shop-filter-popover__item<?php echo $sort === 'rating' ? ' is-active' : ''; ?>" data-sort-value="rating">Müştəri reytinqi</button>
+                    </div>
+                </div>
 
+                <button type="button" class="shop-filter-chip" id="shop_filters_open" aria-expanded="false" aria-controls="shop_filter_drawer">
+                    <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+                    <span>Filtrlər</span>
+                </button>
+
+                <div class="shop-filter-chip-wrap">
+                    <button type="button" class="shop-filter-chip<?php echo $selectedBrand !== '' ? ' is-active' : ''; ?>" id="shop_brand_chip" aria-expanded="false" aria-controls="shop_brand_popover">
+                        <span><?php echo $selectedBrand !== '' ? e($selectedBrand) : 'Brend'; ?></span>
+                        <span class="material-symbols-outlined shop-filter-chip__chevron" aria-hidden="true">expand_more</span>
+                    </button>
+                    <div class="shop-filter-popover shop-filter-popover--scroll" id="shop_brand_popover" hidden>
+                        <button type="button" class="shop-filter-popover__item<?php echo $selectedBrand === '' ? ' is-active' : ''; ?>" data-brand-value="">Bütün markalar</button>
+                        <?php foreach ($brands as $brand): ?>
+                            <?php $bname = (string) ($brand['name'] ?? ''); ?>
+                            <?php if ($bname === '') {
+                                continue;
+                            } ?>
+                            <button type="button" class="shop-filter-popover__item<?php echo $selectedBrand === $bname ? ' is-active' : ''; ?>" data-brand-value="<?php echo e($bname); ?>"><?php echo e($bname); ?></button>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <div class="shop-filter-chip-wrap">
+                    <button type="button" class="shop-filter-chip<?php echo ($minPrice !== null || $maxPrice !== null) ? ' is-active' : ''; ?>" id="shop_price_chip" aria-expanded="false" aria-controls="shop_price_popover">
+                        <span>Qiymət</span>
+                        <span class="material-symbols-outlined shop-filter-chip__chevron" aria-hidden="true">expand_more</span>
+                    </button>
+                    <div class="shop-filter-popover" id="shop_price_popover" hidden>
+                        <div class="shop-filter-popover__title">Qiymət aralığı</div>
+                        <div class="shop-filter-price-quick">
+                            <input class="sort-select" id="shop_quick_min" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Min." value="<?php echo $minPrice !== null ? e((string) $minPrice) : ''; ?>" autocomplete="off">
+                            <input class="sort-select" id="shop_quick_max" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Maks." value="<?php echo $maxPrice !== null ? e((string) $maxPrice) : ''; ?>" autocomplete="off">
+                        </div>
+                        <button type="button" class="shop-filter-popover__apply" id="shop_price_apply">Tətbiq et</button>
+                    </div>
+                </div>
+
+                <button type="button" class="shop-filter-chip<?php echo $onlyDiscounted ? ' is-active' : ''; ?>" id="shop_sale_chip" aria-pressed="<?php echo $onlyDiscounted ? 'true' : 'false'; ?>">
+                    Endirimli
+                </button>
+
+                <a href="shop_page.php" class="shop-filter-chip shop-filter-chip--reset" id="shop_filters_reset" title="Filtrləri sıfırla">
+                    Sıfırla
+                </a>
+            </div>
+        </div>
+
+        <div class="shop-filter-backdrop" id="shop_filter_backdrop" hidden></div>
+
+        <div class="shop-layout">
+            <aside class="sidebar shop-filter-drawer" id="shop_filter_drawer" aria-hidden="true">
+                <div class="shop-filter-drawer__head">
+                    <h2 class="shop-filter-drawer__title">Filtrlər</h2>
+                    <button type="button" class="shop-filter-drawer__close" id="shop_filters_close" aria-label="Bağla">
+                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                <form method="get" id="filter_form" class="filter-form">
+                    <?php if ($onlyDiscounted): ?>
+                        <input type="hidden" name="discounted" value="1" id="filter_discounted">
+                    <?php else: ?>
+                        <input type="hidden" name="discounted" value="" id="filter_discounted" disabled>
+                    <?php endif; ?>
 
                     <div class="filter-category-wrap" style="margin-top:14px;">
                         <h3 class="filter-section__title">Əsas kateqoriya</h3>
@@ -939,9 +1026,9 @@ $products = $productsStmt->fetchAll() ?: [];
                         </select>
                     </div>
 
-                    <div style="display:flex; gap:8px; margin-top:16px;">
+                    <div class="shop-filter-drawer__actions">
                         <button class="btn-add" type="submit" style="padding:10px 12px;">Tətbiq et</button>
-                        <a href="shop_page.php" class="btn-add" style="padding:10px 12px; display:inline-flex; align-items:center; justify-content:center; text-decoration:none;">Sıfırla</a>
+                        <a href="shop_page.php" class="btn-add shop-filter-reset-btn" id="shop_filters_reset_drawer" style="padding:10px 12px; display:inline-flex; align-items:center; justify-content:center; text-decoration:none;">Sıfırla</a>
                     </div>
                 </form>
             </aside>
@@ -1266,6 +1353,285 @@ $products = $productsStmt->fetchAll() ?: [];
             fillGroups(rootSelect.value, initialGroup || '');
             fillChildren(groupSelect.value, initialChild || '');
             fillBrands(currentScope(), initialBrand || '');
+        })();
+    </script>
+    <script>
+        (function () {
+            var drawer = document.getElementById('shop_filter_drawer');
+            var backdrop = document.getElementById('shop_filter_backdrop');
+            var openBtn = document.getElementById('shop_filters_open');
+            var closeBtn = document.getElementById('shop_filters_close');
+            var filterForm = document.getElementById('filter_form');
+            var discountedInput = document.getElementById('filter_discounted');
+            var brandSelect = document.getElementById('brand');
+            var sortSelect = filterForm ? filterForm.querySelector('select[name="sort"]') : null;
+            var minPriceInput = filterForm ? filterForm.querySelector('input[name="min_price"]') : null;
+            var maxPriceInput = filterForm ? filterForm.querySelector('input[name="max_price"]') : null;
+
+            var sortChip = document.getElementById('shop_sort_chip');
+            var brandChip = document.getElementById('shop_brand_chip');
+            var priceChip = document.getElementById('shop_price_chip');
+            var saleChip = document.getElementById('shop_sale_chip');
+            var sortPopover = document.getElementById('shop_sort_popover');
+            var brandPopover = document.getElementById('shop_brand_popover');
+            var pricePopover = document.getElementById('shop_price_popover');
+            var priceApply = document.getElementById('shop_price_apply');
+            var quickMin = document.getElementById('shop_quick_min');
+            var quickMax = document.getElementById('shop_quick_max');
+
+            if (!drawer || !openBtn) {
+                return;
+            }
+
+            function closeAllPopovers() {
+                [sortPopover, brandPopover, pricePopover].forEach(function (el) {
+                    if (el) {
+                        el.hidden = true;
+                        el.style.top = '';
+                        el.style.left = '';
+                    }
+                });
+                [sortChip, brandChip, priceChip].forEach(function (btn) {
+                    if (btn) {
+                        btn.setAttribute('aria-expanded', 'false');
+                    }
+                });
+                document.body.classList.remove('shop-filter-popover-open');
+            }
+
+            function isFocusInsidePopover() {
+                var active = document.activeElement;
+                return !!(active && active.closest && active.closest('.shop-filter-popover'));
+            }
+
+            function positionPopover(btn, popover) {
+                var rect = btn.getBoundingClientRect();
+                var gap = 8;
+                var popoverWidth = Math.min(300, window.innerWidth - 24);
+                var left = rect.left;
+                if (left + popoverWidth > window.innerWidth - 12) {
+                    left = Math.max(12, window.innerWidth - popoverWidth - 12);
+                }
+                if (left < 12) {
+                    left = 12;
+                }
+                popover.style.minWidth = Math.max(rect.width, 220) + 'px';
+                popover.style.left = left + 'px';
+                popover.style.top = (rect.bottom + gap) + 'px';
+            }
+
+            function togglePopover(btn, popover) {
+                if (!btn || !popover) {
+                    return;
+                }
+                var willOpen = popover.hidden;
+                closeAllPopovers();
+                if (willOpen) {
+                    popover.hidden = false;
+                    positionPopover(btn, popover);
+                    btn.setAttribute('aria-expanded', 'true');
+                    document.body.classList.add('shop-filter-popover-open');
+                }
+            }
+
+            function bindPopoverGuard(popover) {
+                if (!popover) {
+                    return;
+                }
+                ['click', 'mousedown', 'touchstart', 'pointerdown'].forEach(function (evtName) {
+                    popover.addEventListener(evtName, function (event) {
+                        event.stopPropagation();
+                    });
+                });
+            }
+
+            bindPopoverGuard(sortPopover);
+            bindPopoverGuard(brandPopover);
+            bindPopoverGuard(pricePopover);
+
+            function openDrawer() {
+                closeAllPopovers();
+                drawer.scrollTop = 0;
+                drawer.classList.add('is-open');
+                drawer.setAttribute('aria-hidden', 'false');
+                openBtn.setAttribute('aria-expanded', 'true');
+                if (backdrop) {
+                    backdrop.hidden = false;
+                }
+                document.body.classList.add('shop-filters-open');
+            }
+
+            function closeDrawer() {
+                drawer.classList.remove('is-open');
+                drawer.setAttribute('aria-hidden', 'true');
+                openBtn.setAttribute('aria-expanded', 'false');
+                if (backdrop) {
+                    backdrop.hidden = true;
+                }
+                document.body.classList.remove('shop-filters-open');
+            }
+
+            function submitFilters() {
+                if (!filterForm) {
+                    return;
+                }
+                if (typeof filterForm.requestSubmit === 'function') {
+                    filterForm.requestSubmit();
+                    return;
+                }
+                filterForm.submit();
+            }
+
+            function setDiscounted(on) {
+                if (!discountedInput) {
+                    return;
+                }
+                if (on) {
+                    discountedInput.disabled = false;
+                    discountedInput.value = '1';
+                } else {
+                    discountedInput.value = '';
+                    discountedInput.disabled = true;
+                }
+            }
+
+            openBtn.addEventListener('click', openDrawer);
+            if (closeBtn) {
+                closeBtn.addEventListener('click', closeDrawer);
+            }
+            if (backdrop) {
+                backdrop.addEventListener('click', closeDrawer);
+            }
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    closeDrawer();
+                    closeAllPopovers();
+                }
+            });
+
+            if (sortChip && sortPopover) {
+                sortChip.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    togglePopover(sortChip, sortPopover);
+                });
+                sortPopover.querySelectorAll('[data-sort-value]').forEach(function (item) {
+                    item.addEventListener('click', function () {
+                        var value = item.getAttribute('data-sort-value') || 'newest';
+                        if (sortSelect) {
+                            sortSelect.value = value;
+                        }
+                        closeAllPopovers();
+                        submitFilters();
+                    });
+                });
+            }
+
+            if (brandChip && brandPopover) {
+                brandChip.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    togglePopover(brandChip, brandPopover);
+                });
+                brandPopover.querySelectorAll('[data-brand-value]').forEach(function (item) {
+                    item.addEventListener('click', function () {
+                        var value = item.getAttribute('data-brand-value') || '';
+                        if (brandSelect) {
+                            brandSelect.value = value;
+                        }
+                        closeAllPopovers();
+                        submitFilters();
+                    });
+                });
+            }
+
+            if (priceChip && pricePopover) {
+                priceChip.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    togglePopover(priceChip, pricePopover);
+                });
+            }
+
+            if (quickMin) {
+                quickMin.addEventListener('keydown', function (event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        if (priceApply) {
+                            priceApply.click();
+                        }
+                    }
+                });
+            }
+            if (quickMax) {
+                quickMax.addEventListener('keydown', function (event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        if (priceApply) {
+                            priceApply.click();
+                        }
+                    }
+                });
+            }
+
+            if (priceApply) {
+                priceApply.addEventListener('click', function () {
+                    if (minPriceInput && quickMin) {
+                        minPriceInput.value = quickMin.value;
+                    }
+                    if (maxPriceInput && quickMax) {
+                        maxPriceInput.value = quickMax.value;
+                    }
+                    closeAllPopovers();
+                    submitFilters();
+                });
+            }
+
+            if (saleChip) {
+                saleChip.addEventListener('click', function () {
+                    var next = saleChip.getAttribute('aria-pressed') !== 'true';
+                    saleChip.setAttribute('aria-pressed', next ? 'true' : 'false');
+                    saleChip.classList.toggle('is-active', next);
+                    setDiscounted(next);
+                    submitFilters();
+                });
+            }
+
+            function resetAllFilters(event) {
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                closeAllPopovers();
+                closeDrawer();
+                document.body.classList.add('shop-is-loading');
+                window.location.href = 'shop_page.php';
+            }
+
+            document.querySelectorAll('#shop_filters_reset, #shop_filters_reset_drawer').forEach(function (resetBtn) {
+                resetBtn.addEventListener('click', resetAllFilters);
+            });
+
+            document.addEventListener('click', function () {
+                if (isFocusInsidePopover()) {
+                    return;
+                }
+                closeAllPopovers();
+            });
+
+            window.addEventListener('resize', function () {
+                if (isFocusInsidePopover()) {
+                    return;
+                }
+                closeAllPopovers();
+            });
+            window.addEventListener('scroll', function (event) {
+                if (isFocusInsidePopover()) {
+                    return;
+                }
+                var target = event.target;
+                if (target && target.closest && target.closest('.shop-filter-popover')) {
+                    return;
+                }
+                closeAllPopovers();
+            }, true);
         })();
     </script>
     <script>
