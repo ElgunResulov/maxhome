@@ -300,6 +300,10 @@ function maxhome_resolve_category_slug_filters(
 $pdo = db();
 $flashMessage = '';
 $flashType = 'success';
+$searchQuery = trim((string) ($_GET['q'] ?? ''));
+if (mb_strlen($searchQuery) > 120) {
+    $searchQuery = mb_substr($searchQuery, 0, 120);
+}
 $selectedBrand = trim((string) ($_GET['brand'] ?? ''));
 $selectedCategory = trim((string) ($_GET['category'] ?? ''));
 $selectedCategorySlug = trim((string) ($_GET['category_slug'] ?? '')); // legacy/backward compatibility
@@ -371,6 +375,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET)) {
     if ($selectedBrand !== '') {
         $clean['brand'] = $selectedBrand;
     }
+    if ($searchQuery !== '') {
+        $clean['q'] = $searchQuery;
+    }
     if ($selectedRootSlug !== '') {
         $clean['root_slug'] = $selectedRootSlug;
     }
@@ -399,7 +406,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET)) {
         $clean['page'] = (string) $page;
     }
 
-    $filterQueryKeys = ['brand', 'category_slug', 'root_slug', 'group_slug', 'child_slug', 'category', 'min_price', 'max_price', 'sort', 'discounted', 'page'];
+    $filterQueryKeys = ['q', 'brand', 'category_slug', 'root_slug', 'group_slug', 'child_slug', 'category', 'min_price', 'max_price', 'sort', 'discounted', 'page'];
     $current = [];
     foreach ($filterQueryKeys as $key) {
         if (!isset($_GET[$key])) {
@@ -714,6 +721,19 @@ if ($selectedBrand !== '') {
     $whereSql .= " AND b.name = :brand";
     $params['brand'] = $selectedBrand;
 }
+if ($searchQuery !== '') {
+    $whereSql .= " AND (
+        p.name LIKE :search_name
+        OR IFNULL(p.short_description, '') LIKE :search_desc
+        OR IFNULL(p.sku, '') LIKE :search_sku
+        OR IFNULL(b.name, '') LIKE :search_brand
+    )";
+    $searchLike = '%' . $searchQuery . '%';
+    $params['search_name'] = $searchLike;
+    $params['search_desc'] = $searchLike;
+    $params['search_sku'] = $searchLike;
+    $params['search_brand'] = $searchLike;
+}
 if ($effectiveCategorySlug !== '') {
     $whereSql .= " AND p.category_id IN (
         WITH RECURSIVE cat_subtree AS (
@@ -761,6 +781,9 @@ $rangeStart = $totalProducts > 0 ? $offset + 1 : 0;
 $rangeEnd = min($offset + $perPage, $totalProducts);
 
 $shopPaginationQuery = [];
+if ($searchQuery !== '') {
+    $shopPaginationQuery['q'] = $searchQuery;
+}
 if ($selectedBrand !== '') {
     $shopPaginationQuery['brand'] = $selectedBrand;
 }
@@ -887,13 +910,6 @@ $products = $productsStmt->fetchAll() ?: [];
                     <button type="button" class="shop-filter-chip shop-filter-chip--icon" id="shop_sort_chip" aria-expanded="false" aria-controls="shop_sort_popover" title="Sırala">
                         <span class="material-symbols-outlined" aria-hidden="true">swap_vert</span>
                     </button>
-                    <div class="shop-filter-popover" id="shop_sort_popover" hidden>
-                        <div class="shop-filter-popover__title">Sırala</div>
-                        <button type="button" class="shop-filter-popover__item<?php echo $sort === 'newest' ? ' is-active' : ''; ?>" data-sort-value="newest">Ən yenilər</button>
-                        <button type="button" class="shop-filter-popover__item<?php echo $sort === 'price_low' ? ' is-active' : ''; ?>" data-sort-value="price_low">Qiymət: Aşağıdan yuxarı</button>
-                        <button type="button" class="shop-filter-popover__item<?php echo $sort === 'price_high' ? ' is-active' : ''; ?>" data-sort-value="price_high">Qiymət: Yuxarıdan aşağı</button>
-                        <button type="button" class="shop-filter-popover__item<?php echo $sort === 'rating' ? ' is-active' : ''; ?>" data-sort-value="rating">Müştəri reytinqi</button>
-                    </div>
                 </div>
 
                 <button type="button" class="shop-filter-chip" id="shop_filters_open" aria-expanded="false" aria-controls="shop_filter_drawer">
@@ -906,16 +922,6 @@ $products = $productsStmt->fetchAll() ?: [];
                         <span><?php echo $selectedBrand !== '' ? e($selectedBrand) : 'Brend'; ?></span>
                         <span class="material-symbols-outlined shop-filter-chip__chevron" aria-hidden="true">expand_more</span>
                     </button>
-                    <div class="shop-filter-popover shop-filter-popover--scroll" id="shop_brand_popover" hidden>
-                        <button type="button" class="shop-filter-popover__item<?php echo $selectedBrand === '' ? ' is-active' : ''; ?>" data-brand-value="">Bütün markalar</button>
-                        <?php foreach ($brands as $brand): ?>
-                            <?php $bname = (string) ($brand['name'] ?? ''); ?>
-                            <?php if ($bname === '') {
-                                continue;
-                            } ?>
-                            <button type="button" class="shop-filter-popover__item<?php echo $selectedBrand === $bname ? ' is-active' : ''; ?>" data-brand-value="<?php echo e($bname); ?>"><?php echo e($bname); ?></button>
-                        <?php endforeach; ?>
-                    </div>
                 </div>
 
                 <div class="shop-filter-chip-wrap">
@@ -923,14 +929,6 @@ $products = $productsStmt->fetchAll() ?: [];
                         <span>Qiymət</span>
                         <span class="material-symbols-outlined shop-filter-chip__chevron" aria-hidden="true">expand_more</span>
                     </button>
-                    <div class="shop-filter-popover" id="shop_price_popover" hidden>
-                        <div class="shop-filter-popover__title">Qiymət aralığı</div>
-                        <div class="shop-filter-price-quick">
-                            <input class="sort-select" id="shop_quick_min" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Min." value="<?php echo $minPrice !== null ? e((string) $minPrice) : ''; ?>" autocomplete="off">
-                            <input class="sort-select" id="shop_quick_max" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Maks." value="<?php echo $maxPrice !== null ? e((string) $maxPrice) : ''; ?>" autocomplete="off">
-                        </div>
-                        <button type="button" class="shop-filter-popover__apply" id="shop_price_apply">Tətbiq et</button>
-                    </div>
                 </div>
 
                 <button type="button" class="shop-filter-chip<?php echo $onlyDiscounted ? ' is-active' : ''; ?>" id="shop_sale_chip" aria-pressed="<?php echo $onlyDiscounted ? 'true' : 'false'; ?>">
@@ -940,6 +938,35 @@ $products = $productsStmt->fetchAll() ?: [];
                 <a href="shop_page.php" class="shop-filter-chip shop-filter-chip--reset" id="shop_filters_reset" title="Filtrləri sıfırla">
                     Sıfırla
                 </a>
+            </div>
+
+            <?php /* Popoverlar scroll konteynerin xaricində — telefonda overflow ilə kəsilməsin */ ?>
+            <div class="shop-filter-popover" id="shop_sort_popover" hidden>
+                <div class="shop-filter-popover__title">Sırala</div>
+                <button type="button" class="shop-filter-popover__item<?php echo $sort === 'newest' ? ' is-active' : ''; ?>" data-sort-value="newest">Ən yenilər</button>
+                <button type="button" class="shop-filter-popover__item<?php echo $sort === 'price_low' ? ' is-active' : ''; ?>" data-sort-value="price_low">Qiymət: Aşağıdan yuxarı</button>
+                <button type="button" class="shop-filter-popover__item<?php echo $sort === 'price_high' ? ' is-active' : ''; ?>" data-sort-value="price_high">Qiymət: Yuxarıdan aşağı</button>
+                <button type="button" class="shop-filter-popover__item<?php echo $sort === 'rating' ? ' is-active' : ''; ?>" data-sort-value="rating">Müştəri reytinqi</button>
+            </div>
+
+            <div class="shop-filter-popover shop-filter-popover--scroll" id="shop_brand_popover" hidden>
+                <button type="button" class="shop-filter-popover__item<?php echo $selectedBrand === '' ? ' is-active' : ''; ?>" data-brand-value="">Bütün markalar</button>
+                <?php foreach ($brands as $brand): ?>
+                    <?php $bname = (string) ($brand['name'] ?? ''); ?>
+                    <?php if ($bname === '') {
+                        continue;
+                    } ?>
+                    <button type="button" class="shop-filter-popover__item<?php echo $selectedBrand === $bname ? ' is-active' : ''; ?>" data-brand-value="<?php echo e($bname); ?>"><?php echo e($bname); ?></button>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="shop-filter-popover" id="shop_price_popover" hidden>
+                <div class="shop-filter-popover__title">Qiymət aralığı</div>
+                <div class="shop-filter-price-quick">
+                    <input class="sort-select" id="shop_quick_min" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Min." value="<?php echo $minPrice !== null ? e((string) $minPrice) : ''; ?>" autocomplete="off">
+                    <input class="sort-select" id="shop_quick_max" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Maks." value="<?php echo $maxPrice !== null ? e((string) $maxPrice) : ''; ?>" autocomplete="off">
+                </div>
+                <button type="button" class="shop-filter-popover__apply" id="shop_price_apply">Tətbiq et</button>
             </div>
         </div>
 
@@ -954,6 +981,9 @@ $products = $productsStmt->fetchAll() ?: [];
                     </button>
                 </div>
                 <form method="get" id="filter_form" class="filter-form">
+                    <?php if ($searchQuery !== ''): ?>
+                        <input type="hidden" name="q" value="<?php echo e($searchQuery); ?>">
+                    <?php endif; ?>
                     <?php if ($onlyDiscounted): ?>
                         <input type="hidden" name="discounted" value="1" id="filter_discounted">
                     <?php else: ?>
@@ -1384,12 +1414,15 @@ $products = $productsStmt->fetchAll() ?: [];
                 return;
             }
 
+            var popoverIgnoreCloseUntil = 0;
+
             function closeAllPopovers() {
                 [sortPopover, brandPopover, pricePopover].forEach(function (el) {
                     if (el) {
                         el.hidden = true;
                         el.style.top = '';
                         el.style.left = '';
+                        el.style.maxHeight = '';
                     }
                 });
                 [sortChip, brandChip, priceChip].forEach(function (btn) {
@@ -1400,9 +1433,13 @@ $products = $productsStmt->fetchAll() ?: [];
                 document.body.classList.remove('shop-filter-popover-open');
             }
 
+            function isInsidePopoverUi(node) {
+                return !!(node && node.closest && node.closest('.shop-filter-popover, .shop-filter-chip-wrap, #shop_sort_chip, #shop_brand_chip, #shop_price_chip'));
+            }
+
             function isFocusInsidePopover() {
                 var active = document.activeElement;
-                return !!(active && active.closest && active.closest('.shop-filter-popover'));
+                return isInsidePopoverUi(active);
             }
 
             function positionPopover(btn, popover) {
@@ -1416,9 +1453,12 @@ $products = $productsStmt->fetchAll() ?: [];
                 if (left < 12) {
                     left = 12;
                 }
+                var top = rect.bottom + gap;
+                var maxH = Math.max(160, window.innerHeight - top - 16);
                 popover.style.minWidth = Math.max(rect.width, 220) + 'px';
                 popover.style.left = left + 'px';
-                popover.style.top = (rect.bottom + gap) + 'px';
+                popover.style.top = top + 'px';
+                popover.style.maxHeight = maxH + 'px';
             }
 
             function togglePopover(btn, popover) {
@@ -1428,10 +1468,14 @@ $products = $productsStmt->fetchAll() ?: [];
                 var willOpen = popover.hidden;
                 closeAllPopovers();
                 if (willOpen) {
+                    if (popover.parentElement !== document.body) {
+                        document.body.appendChild(popover);
+                    }
                     popover.hidden = false;
                     positionPopover(btn, popover);
                     btn.setAttribute('aria-expanded', 'true');
                     document.body.classList.add('shop-filter-popover-open');
+                    popoverIgnoreCloseUntil = Date.now() + 350;
                 }
             }
 
@@ -1610,14 +1654,20 @@ $products = $productsStmt->fetchAll() ?: [];
                 resetBtn.addEventListener('click', resetAllFilters);
             });
 
-            document.addEventListener('click', function () {
-                if (isFocusInsidePopover()) {
+            document.addEventListener('click', function (event) {
+                if (Date.now() < popoverIgnoreCloseUntil) {
+                    return;
+                }
+                if (isInsidePopoverUi(event.target) || isFocusInsidePopover()) {
                     return;
                 }
                 closeAllPopovers();
             });
 
             window.addEventListener('resize', function () {
+                if (Date.now() < popoverIgnoreCloseUntil) {
+                    return;
+                }
                 if (isFocusInsidePopover()) {
                     return;
                 }
@@ -1625,12 +1675,20 @@ $products = $productsStmt->fetchAll() ?: [];
             });
             var scrollFrame = null;
             window.addEventListener('scroll', function (event) {
+                if (!document.body.classList.contains('shop-filter-popover-open')) {
+                    return;
+                }
+                if (Date.now() < popoverIgnoreCloseUntil) {
+                    return;
+                }
                 if (isFocusInsidePopover()) {
                     return;
                 }
                 var target = event.target;
-                if (target && target.closest && target.closest('.shop-filter-popover')) {
-                    return;
+                if (target && target.nodeType === 1 && target.closest) {
+                    if (target.closest('.shop-filter-popover, .shop-filter-bar__scroll')) {
+                        return;
+                    }
                 }
                 if (scrollFrame !== null) {
                     return;

@@ -9,6 +9,8 @@ if (session_status() === PHP_SESSION_ACTIVE) {
 }
 
 $q = trim((string) ($_GET['q'] ?? ''));
+// Çox qısa sorğularda səs-küy olmasın, amma 1 hərfdən axtarsın
+$minLen = 1;
 
 try {
     $pdo = db();
@@ -16,84 +18,127 @@ try {
     $like = '%' . $q . '%';
     $start = $q . '%';
 
-    $popularSql = "SELECT p.name, p.slug
-                   FROM products p
-                   WHERE p.status = 'active'{$catalogOnlineSql}";
-    $popularParams = [];
-    if ($q !== '') {
-        $popularSql .= " AND p.name LIKE :like";
-        $popularParams['like'] = $like;
-    }
-    $popularSql .= " ORDER BY p.rating_count DESC, p.rating_avg DESC, p.id DESC LIMIT 3";
-    $popularStmt = $pdo->prepare($popularSql);
-    $popularStmt->execute($popularParams);
-    $popularRows = $popularStmt->fetchAll() ?: [];
+    $popular = [];
+    $categories = [];
+    $products = [];
 
-    $categoriesSql = "SELECT c.name, c.slug
-                      FROM categories c
-                      WHERE c.is_active = 1";
-    $categoryParams = [];
-    if ($q !== '') {
-        $categoriesSql .= " AND c.name LIKE :cat_like";
-        $categoryParams['cat_like'] = $like;
-    }
-    $categoriesSql .= " ORDER BY c.sort_order ASC, c.id ASC LIMIT 3";
-    $categoryStmt = $pdo->prepare($categoriesSql);
-    $categoryStmt->execute($categoryParams);
-    $categoryRows = $categoryStmt->fetchAll() ?: [];
+    if ($q !== '' && mb_strlen($q) >= $minLen) {
+        $popularSql = "SELECT p.name, p.slug
+                       FROM products p
+                       LEFT JOIN brands b ON b.id = p.brand_id
+                       WHERE p.status = 'active'{$catalogOnlineSql}
+                         AND (
+                            p.name LIKE :like
+                            OR IFNULL(p.short_description, '') LIKE :like2
+                            OR IFNULL(p.sku, '') LIKE :like3
+                            OR IFNULL(b.name, '') LIKE :like4
+                         )
+                       ORDER BY
+                         CASE WHEN p.name LIKE :start THEN 0 WHEN IFNULL(b.name, '') LIKE :start2 THEN 1 ELSE 2 END,
+                         p.rating_count DESC,
+                         p.rating_avg DESC,
+                         p.id DESC
+                       LIMIT 4";
+        $popularStmt = $pdo->prepare($popularSql);
+        $popularStmt->execute([
+            'like' => $like,
+            'like2' => $like,
+            'like3' => $like,
+            'like4' => $like,
+            'start' => $start,
+            'start2' => $start,
+        ]);
+        $popular = array_map(static fn(array $r): array => [
+            'name' => (string) ($r['name'] ?? ''),
+            'slug' => (string) ($r['slug'] ?? ''),
+        ], $popularStmt->fetchAll() ?: []);
 
-    $productsSql = "SELECT
-                        p.name,
-                        p.slug,
-                        p.base_price,
-                        p.compare_at_price,
-                        c.name AS category_name,
-                        (SELECT image_url
-                         FROM product_images pi
-                         WHERE pi.product_id = p.id
-                         ORDER BY pi.is_primary DESC, pi.sort_order ASC, pi.id ASC
-                         LIMIT 1) AS image_url
-                    FROM products p
-                    LEFT JOIN categories c ON c.id = p.category_id
-                    WHERE p.status = 'active'{$catalogOnlineSql}";
-    $productsParams = [];
-    if ($q !== '') {
-        $productsSql .= " AND (p.name LIKE :product_like OR p.short_description LIKE :desc_like)";
-        $productsParams['product_like'] = $like;
-        $productsParams['desc_like'] = $like;
-    }
-    $productsSql .= " ORDER BY
-                        CASE WHEN p.name LIKE :start_like THEN 0 ELSE 1 END,
-                        p.rating_count DESC,
-                        p.id DESC
-                      LIMIT 3";
-    $productsParams['start_like'] = $start;
-    $productsStmt = $pdo->prepare($productsSql);
-    $productsStmt->execute($productsParams);
-    $productRows = $productsStmt->fetchAll() ?: [];
+        $categoriesSql = "SELECT c.name, c.slug
+                          FROM categories c
+                          WHERE c.is_active = 1
+                            AND c.name LIKE :cat_like
+                          ORDER BY
+                            CASE WHEN c.name LIKE :cat_start THEN 0 ELSE 1 END,
+                            c.sort_order ASC,
+                            c.id ASC
+                          LIMIT 4";
+        $categoryStmt = $pdo->prepare($categoriesSql);
+        $categoryStmt->execute([
+            'cat_like' => $like,
+            'cat_start' => $start,
+        ]);
+        $categories = array_map(static fn(array $r): array => [
+            'name' => (string) ($r['name'] ?? ''),
+            'slug' => (string) ($r['slug'] ?? ''),
+        ], $categoryStmt->fetchAll() ?: []);
 
-    $products = array_map(static function (array $row): array {
-        return [
-            'name' => (string) ($row['name'] ?? ''),
-            'slug' => (string) ($row['slug'] ?? ''),
-            'category' => (string) ($row['category_name'] ?? 'General'),
-            'price' => (float) ($row['base_price'] ?? 0),
-            'old_price' => $row['compare_at_price'] !== null ? (float) $row['compare_at_price'] : null,
-            'image_url' => trim((string) ($row['image_url'] ?? '')),
-        ];
-    }, $productRows);
+        $productsSql = "SELECT
+                            p.name,
+                            p.slug,
+                            p.base_price,
+                            p.compare_at_price,
+                            c.name AS category_name,
+                            b.name AS brand_name,
+                            (SELECT image_url
+                             FROM product_images pi
+                             WHERE pi.product_id = p.id
+                             ORDER BY pi.is_primary DESC, pi.sort_order ASC, pi.id ASC
+                             LIMIT 1) AS image_url
+                        FROM products p
+                        LEFT JOIN brands b ON b.id = p.brand_id
+                        LEFT JOIN categories c ON c.id = p.category_id
+                        WHERE p.status = 'active'{$catalogOnlineSql}
+                          AND (
+                            p.name LIKE :product_like
+                            OR IFNULL(p.short_description, '') LIKE :desc_like
+                            OR IFNULL(p.sku, '') LIKE :sku_like
+                            OR IFNULL(b.name, '') LIKE :brand_like
+                          )
+                        ORDER BY
+                            CASE
+                                WHEN p.name LIKE :start_like THEN 0
+                                WHEN IFNULL(b.name, '') LIKE :brand_start THEN 1
+                                ELSE 2
+                            END,
+                            p.rating_count DESC,
+                            p.id DESC
+                        LIMIT 8";
+        $productsStmt = $pdo->prepare($productsSql);
+        $productsStmt->execute([
+            'product_like' => $like,
+            'desc_like' => $like,
+            'sku_like' => $like,
+            'brand_like' => $like,
+            'start_like' => $start,
+            'brand_start' => $start,
+        ]);
+        $productRows = $productsStmt->fetchAll() ?: [];
+
+        $products = array_map(static function (array $row): array {
+            $category = trim((string) ($row['category_name'] ?? ''));
+            $brand = trim((string) ($row['brand_name'] ?? ''));
+            if ($category === '' && $brand !== '') {
+                $category = $brand;
+            } elseif ($category === '') {
+                $category = 'Ümumi';
+            }
+
+            return [
+                'name' => (string) ($row['name'] ?? ''),
+                'slug' => (string) ($row['slug'] ?? ''),
+                'category' => $category,
+                'price' => (float) ($row['base_price'] ?? 0),
+                'old_price' => $row['compare_at_price'] !== null ? (float) $row['compare_at_price'] : null,
+                'image_url' => trim((string) ($row['image_url'] ?? '')),
+            ];
+        }, $productRows);
+    }
 
     echo json_encode([
         'ok' => true,
         'query' => $q,
-        'popular' => array_map(static fn(array $r): array => [
-            'name' => (string) ($r['name'] ?? ''),
-            'slug' => (string) ($r['slug'] ?? ''),
-        ], $popularRows),
-        'categories' => array_map(static fn(array $r): array => [
-            'name' => (string) ($r['name'] ?? ''),
-            'slug' => (string) ($r['slug'] ?? ''),
-        ], $categoryRows),
+        'popular' => $popular,
+        'categories' => $categories,
         'products' => $products,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 } catch (Throwable $e) {
@@ -104,5 +149,6 @@ try {
         'popular' => [],
         'categories' => [],
         'products' => [],
+        'message' => $e->getMessage(),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }

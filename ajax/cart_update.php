@@ -34,6 +34,10 @@ try {
 
     $items = fetchCartItems($pdo);
     $totals = cartTotals($items);
+    $quantityTotal = 0;
+    foreach ($items as $item) {
+        $quantityTotal += (int) ($item['quantity'] ?? 0);
+    }
     $updatedItem = null;
 
     foreach ($items as $item) {
@@ -69,6 +73,7 @@ try {
             'total' => round((float) $totals['total'], 2),
         ],
         'item_count' => count($items),
+        'quantity_total' => $quantityTotal,
         'empty' => empty($items),
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {

@@ -304,6 +304,7 @@ h3,
     margin: 0 0 1.25rem;
     position: relative;
     z-index: 30;
+    overflow: visible;
 }
 
 body.shop-filter-popover-open .shop-filter-bar {
@@ -416,6 +417,11 @@ body.shop-filter-popover-open .product-compare-fab {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
     touch-action: pan-y;
+}
+
+/* body-yə köçürülmüş popoverlar filter bar overflow clip-indən çıxır */
+body > .shop-filter-popover {
+    z-index: 420;
 }
 
 .shop-filter-popover__item {

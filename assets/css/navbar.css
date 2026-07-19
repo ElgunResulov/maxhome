@@ -410,6 +410,33 @@
     cursor: pointer;
 }
 
+.maxhome-icon-btn--cart {
+    position: relative;
+}
+
+.maxhome-cart-badge {
+    position: absolute;
+    top: -6px;
+    right: -8px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #e11d48;
+    color: #fff;
+    font-family: 'Manrope', 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-shadow: 0 0 0 2px #fff;
+    pointer-events: none;
+}
+
+.maxhome-cart-badge[hidden] {
+    display: none !important;
+}
+
 .maxhome-icon-btn .material-symbols-outlined {
     font-size: 20px;
     line-height: 1;
@@ -658,12 +685,38 @@ body.maxhome-cats-modal-open {
     right: 0;
     z-index: 230;
     min-width: min(640px, calc(100vw - 40px));
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    background: transparent;
+}
+
+body > .maxhome-search-suggest {
+    z-index: 520;
 }
 
 .maxhome-search-suggest__grid {
     display: grid;
-    grid-template-columns: minmax(260px, 0.9fr) minmax(380px, 1.1fr);
+    grid-template-columns: 1fr;
     gap: 10px;
+}
+
+@media (min-width: 900px) {
+    .maxhome-search-suggest__grid {
+        grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1.15fr);
+    }
+
+    .maxhome-search-suggest__card--products {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .maxhome-search-suggest__card--meta {
+        grid-column: 1;
+        grid-row: 1;
+    }
 }
 
 .maxhome-search-suggest__card {
@@ -918,10 +971,6 @@ body.maxhome-cats-modal-open {
         width: 100%;
     }
 
-    .maxhome-search-suggest__grid {
-        grid-template-columns: 1fr;
-    }
-
     .maxhome-search-suggest__product-name {
         font-size: 14px;
     }
@@ -980,6 +1029,24 @@ body.maxhome-cats-modal-open {
         color: #4b5563;
         font-family: 'Inter', sans-serif;
         -webkit-tap-highlight-color: transparent;
+    }
+
+    .mh-bottom-nav__icon-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .maxhome-cart-badge--nav {
+        top: -4px;
+        right: -10px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        font-size: 10px;
+        line-height: 16px;
+        box-shadow: 0 0 0 1.5px #fff;
     }
 
     .mh-bottom-nav__icon {

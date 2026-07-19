@@ -201,6 +201,9 @@ if (!in_array($selectedPaymentMethod, ['', 'card', 'cash_on_delivery'], true)) {
             if (item.removed) {
                 row.remove();
                 updateEmptyState(!!data.empty);
+                if (typeof window.maxhomeUpdateCartBadge === 'function' && typeof data.quantity_total !== 'undefined') {
+                    window.maxhomeUpdateCartBadge(data.quantity_total);
+                }
                 return;
             }
 
@@ -214,6 +217,9 @@ if (!in_array($selectedPaymentMethod, ['', 'card', 'cash_on_delivery'], true)) {
                 el.textContent = formatMoney(item.line_total);
             });
             updateEmptyState(!!data.empty);
+            if (typeof window.maxhomeUpdateCartBadge === 'function' && typeof data.quantity_total !== 'undefined') {
+                window.maxhomeUpdateCartBadge(data.quantity_total);
+            }
         }
 
         document.querySelectorAll('.js-cart-form').forEach(function (form) {

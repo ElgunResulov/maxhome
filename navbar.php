@@ -8,6 +8,13 @@ $lang = maxhome_current_lang();
 $searchQuery = trim((string) ($_GET['q'] ?? ''));
 $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
 $canSeeWarehouseSalesLink = isUserLoggedIn() && userHasAnyRole(['seller', 'satici', 'satıcı', 'admin']);
+$navbarCartCount = 0;
+try {
+    $navbarCartCount = cartQuantityCount(db());
+} catch (Throwable $e) {
+    $navbarCartCount = 0;
+}
+$navbarCartBadgeLabel = $navbarCartCount > 99 ? '99+' : (string) $navbarCartCount;
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_SESSION_ACTIVE) {
     session_write_close();
 }
@@ -32,7 +39,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
             <?php endif; ?>
         </div>
 
-        <div class="maxhome-navbar__search" data-mh-search>
+        <div class="maxhome-navbar__search" data-mh-search data-mh-search-endpoint="<?php
+            $mhScriptDir = str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '')));
+            $mhScriptDir = rtrim($mhScriptDir, '/');
+            echo e(($mhScriptDir === '' ? '' : $mhScriptDir) . '/ajax/navbar_search.php');
+        ?>">
             <button
                 class="maxhome-navbar__cats-btn"
                 type="button"
@@ -72,8 +83,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
                 <a class="maxhome-lang-switch__item <?php echo $lang === 'az' ? 'maxhome-lang-switch__item--active' : ''; ?>" href="<?php echo e(maxhome_lang_url('az')); ?>"><?php echo e(t('lang.az')); ?></a>
                 <a class="maxhome-lang-switch__item <?php echo $lang === 'en' ? 'maxhome-lang-switch__item--active' : ''; ?>" href="<?php echo e(maxhome_lang_url('en')); ?>"><?php echo e(t('lang.en')); ?></a>
             </div>
-            <a class="maxhome-icon-btn" href="shopping_cart.php" aria-label="<?php echo e(t('nav.cart')); ?>">
-                <span class="material-symbols-outlined">shopping_cart</span>
+            <a class="maxhome-icon-btn maxhome-icon-btn--cart" href="shopping_cart.php" aria-label="<?php echo e(t('nav.cart')); ?><?php echo $navbarCartCount > 0 ? ' (' . $navbarCartBadgeLabel . ')' : ''; ?>" data-mh-cart-link>
+                <span class="material-symbols-outlined" aria-hidden="true">shopping_cart</span>
+                <span class="maxhome-cart-badge" data-mh-cart-badge <?php echo $navbarCartCount > 0 ? '' : 'hidden'; ?>><?php echo e($navbarCartBadgeLabel); ?></span>
             </a>
             <?php if (isUserLoggedIn()): ?>
                 <a class="maxhome-icon-btn" href="user_logout.php" aria-label="<?php echo e(t('nav.user_logout')); ?>" title="<?php echo e(currentUserName() !== '' ? currentUserName() : t('nav.user_logout')); ?>">
@@ -127,8 +139,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
         </span>
         <span class="mh-bottom-nav__dot" aria-hidden="true"></span>
     </a>
-    <a class="mh-bottom-nav__item <?php echo $currentPage === 'cart' ? 'is-active' : ''; ?>" href="shopping_cart.php">
-        <span class="material-symbols-outlined mh-bottom-nav__icon" aria-hidden="true">shopping_cart</span>
+    <a class="mh-bottom-nav__item mh-bottom-nav__item--cart <?php echo $currentPage === 'cart' ? 'is-active' : ''; ?>" href="shopping_cart.php" data-mh-cart-link>
+        <span class="mh-bottom-nav__icon-wrap">
+            <span class="material-symbols-outlined mh-bottom-nav__icon" aria-hidden="true">shopping_cart</span>
+            <span class="maxhome-cart-badge maxhome-cart-badge--nav" data-mh-cart-badge <?php echo $navbarCartCount > 0 ? '' : 'hidden'; ?>><?php echo e($navbarCartBadgeLabel); ?></span>
+        </span>
         <span class="mh-bottom-nav__label"><?php echo e(t('nav.cart_short', 'Səbət')); ?></span>
     </a>
     <a class="mh-bottom-nav__item <?php echo $currentPage === 'profile' ? 'is-active' : ''; ?>" href="<?php echo isUserLoggedIn() ? 'user_logout.php' : 'user_login.php'; ?>">
@@ -276,6 +291,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
     }
     var debounceTimer = null;
     var currentController = null;
+    var searchEndpoint = searchRoot.getAttribute('data-mh-search-endpoint') || 'ajax/navbar_search.php';
+    var suggestOnBody = false;
 
     function escapeHtml(value) {
         return String(value || '')
@@ -291,12 +308,50 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
         return num.toFixed(2) + '\u202f' + '₼';
     }
 
+    function ensureSuggestOnBody() {
+        if (!suggestBox || suggestOnBody) {
+            return;
+        }
+        document.body.appendChild(suggestBox);
+        suggestOnBody = true;
+    }
+
+    function positionSuggestBox() {
+        if (!suggestBox || !searchRoot) {
+            return;
+        }
+        ensureSuggestOnBody();
+        var wrap = searchRoot.querySelector('.maxhome-navbar__search-wrap') || searchRoot;
+        var rect = wrap.getBoundingClientRect();
+        var left = Math.max(8, rect.left);
+        var width = Math.min(rect.width, window.innerWidth - 16);
+        if (left + width > window.innerWidth - 8) {
+            left = Math.max(8, window.innerWidth - width - 8);
+        }
+        suggestBox.style.position = 'fixed';
+        suggestBox.style.left = left + 'px';
+        suggestBox.style.top = (rect.bottom + 8) + 'px';
+        suggestBox.style.width = width + 'px';
+        suggestBox.style.right = 'auto';
+        suggestBox.style.minWidth = '0';
+        suggestBox.style.maxWidth = 'calc(100vw - 16px)';
+        suggestBox.style.zIndex = '520';
+    }
+
     function hideSuggestions() {
         if (!suggestBox) {
             return;
         }
         suggestBox.hidden = true;
         suggestBox.innerHTML = '';
+        suggestBox.style.left = '';
+        suggestBox.style.top = '';
+        suggestBox.style.width = '';
+        suggestBox.style.right = '';
+        suggestBox.style.minWidth = '';
+        suggestBox.style.maxWidth = '';
+        suggestBox.style.zIndex = '';
+        suggestBox.style.position = '';
     }
 
     function renderSuggestions(data) {
@@ -351,15 +406,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
 
         suggestBox.innerHTML =
             '<div class="maxhome-search-suggest__grid">' +
-                '<section class="maxhome-search-suggest__card">' +
+                '<section class="maxhome-search-suggest__card maxhome-search-suggest__card--products">' +
+                    '<h4 class="maxhome-search-suggest__title">Məhsullar</h4>' +
+                    (productsHtml || '<p class="maxhome-search-suggest__empty">Nəticə yoxdur</p>') +
+                '</section>' +
+                '<section class="maxhome-search-suggest__card maxhome-search-suggest__card--meta">' +
                     '<h4 class="maxhome-search-suggest__title">Ən çox axtarılan</h4>' +
                     (popularHtml || '<p class="maxhome-search-suggest__empty">Nəticə yoxdur</p>') +
                     '<h4 class="maxhome-search-suggest__title maxhome-search-suggest__title--spaced">Kateqoriyalar</h4>' +
                     (categoriesHtml || '<p class="maxhome-search-suggest__empty">Nəticə yoxdur</p>') +
-                '</section>' +
-                '<section class="maxhome-search-suggest__card">' +
-                    '<h4 class="maxhome-search-suggest__title">Məhsullar</h4>' +
-                    (productsHtml || '<p class="maxhome-search-suggest__empty">Nəticə yoxdur</p>') +
                 '</section>' +
             '</div>' +
             '<a class="maxhome-search-suggest__banner" href="shop_page.php?q=' + encodeURIComponent(data.query || '') + '">' +
@@ -367,6 +422,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
                 '<strong class="maxhome-search-suggest__banner-main">Axtardığın məhsulu indi daha sərfəli tap</strong>' +
                 '<span class="maxhome-search-suggest__banner-sub">Bütün nəticələrə keçid et</span>' +
             '</a>';
+        positionSuggestBox();
         suggestBox.hidden = false;
     }
 
@@ -379,6 +435,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
             hideSuggestions();
             if (currentController) {
                 currentController.abort();
+                currentController = null;
             }
             return;
         }
@@ -386,17 +443,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
             currentController.abort();
         }
         currentController = new AbortController();
-        var url = 'ajax/navbar_search.php?q=' + encodeURIComponent(cleanQuery);
-        fetch(url, { signal: currentController.signal })
+        var requestToken = currentController;
+        var url = searchEndpoint + (searchEndpoint.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(cleanQuery);
+        fetch(url, { signal: requestToken.signal, credentials: 'same-origin' })
             .then(function (response) { return response.ok ? response.json() : null; })
             .then(function (data) {
+                if (requestToken !== currentController) {
+                    return;
+                }
                 if (!data || data.ok !== true) {
                     hideSuggestions();
                     return;
                 }
                 renderSuggestions(data);
             })
-            .catch(function () {
+            .catch(function (err) {
+                if (err && err.name === 'AbortError') {
+                    return;
+                }
+                if (requestToken !== currentController) {
+                    return;
+                }
                 hideSuggestions();
             });
     }
@@ -405,7 +472,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
         if (!suggestBox || suggestBox.hidden) {
             return;
         }
-        if (searchRoot.contains(event.target)) {
+        if (searchRoot.contains(event.target) || suggestBox.contains(event.target)) {
             return;
         }
         hideSuggestions();
@@ -423,17 +490,56 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
         }
     });
 
-    searchInput.addEventListener('input', function () {
+    function scheduleSuggestions() {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(function () {
             loadSuggestions(searchInput.value || '');
-        }, 220);
-    });
+        }, 140);
+    }
+
+    searchInput.addEventListener('input', scheduleSuggestions);
+    searchInput.addEventListener('keyup', scheduleSuggestions);
+    searchInput.addEventListener('search', scheduleSuggestions);
 
     searchInput.addEventListener('focus', function () {
         if (String(searchInput.value || '').trim().length > 0) {
             loadSuggestions(searchInput.value || '');
         }
     });
+
+    window.addEventListener('resize', function () {
+        if (suggestBox && !suggestBox.hidden) {
+            positionSuggestBox();
+        }
+    });
+    window.addEventListener('scroll', function () {
+        if (suggestBox && !suggestBox.hidden) {
+            positionSuggestBox();
+        }
+    }, { passive: true });
+})();
+</script>
+<script>
+(function () {
+    window.maxhomeUpdateCartBadge = function (count) {
+        var n = Math.max(0, parseInt(count, 10) || 0);
+        var label = n > 99 ? '99+' : String(n);
+        document.querySelectorAll('[data-mh-cart-badge]').forEach(function (badge) {
+            badge.textContent = label;
+            if (n > 0) {
+                badge.removeAttribute('hidden');
+            } else {
+                badge.setAttribute('hidden', '');
+            }
+        });
+        document.querySelectorAll('[data-mh-cart-link]').forEach(function (link) {
+            var base = link.getAttribute('aria-label') || '';
+            base = base.replace(/\s*\(\d+\+?\)$/, '').trim();
+            if (!base) {
+                base = 'Səbət';
+            }
+            link.setAttribute('aria-label', n > 0 ? (base + ' (' + label + ')') : base);
+        });
+    };
 })();
 </script>

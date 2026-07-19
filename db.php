@@ -427,6 +427,34 @@ function cartTotals(array $items): array
     ];
 }
 
+/**
+ * Səbətdəki ümumi məhsul sayı (quantity cəmi). Boş səbət yaratmır.
+ */
+function cartQuantityCount(PDO $pdo): int
+{
+    $cartId = 0;
+    if (isset($_SESSION['cart_id'])) {
+        $cartId = (int) $_SESSION['cart_id'];
+    }
+
+    if ($cartId <= 0) {
+        return 0;
+    }
+
+    $active = $pdo->prepare("SELECT id FROM carts WHERE id = :id AND status = 'active' LIMIT 1");
+    $active->execute(['id' => $cartId]);
+    if (!$active->fetchColumn()) {
+        return 0;
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT COALESCE(SUM(quantity), 0) FROM cart_items WHERE cart_id = :cart_id'
+    );
+    $stmt->execute(['cart_id' => $cartId]);
+
+    return max(0, (int) $stmt->fetchColumn());
+}
+
 function createOrderFromActiveCart(PDO $pdo, array $payload, ?int $userId = null): string
 {
     $cartId = ensureCart($pdo);
