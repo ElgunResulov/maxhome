@@ -300,6 +300,7 @@ function maxhome_resolve_category_slug_filters(
 $pdo = db();
 $flashMessage = '';
 $flashType = 'success';
+$isAjaxProducts = isset($_GET['ajax_products']) && (string) $_GET['ajax_products'] === '1';
 $searchQuery = trim((string) ($_GET['q'] ?? ''));
 if (mb_strlen($searchQuery) > 120) {
     $searchQuery = mb_substr($searchQuery, 0, 120);
@@ -369,7 +370,7 @@ if (
 }
 
 // Clean URL: yalnız filtr parametrlərini müqayisə et (PHPSESSID, utm_* və s. redirect döngəsinə səbəb olurdu).
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET)) {
+if (!$isAjaxProducts && $_SERVER['REQUEST_METHOD'] === 'GET' && !empty($_GET)) {
     $clean = [];
 
     if ($selectedBrand !== '') {
@@ -858,6 +859,168 @@ $sql = "SELECT
 $productsStmt = $pdo->prepare($sql);
 $productsStmt->execute($params);
 $products = $productsStmt->fetchAll() ?: [];
+
+if ($isAjaxProducts) {
+    header('Content-Type: application/json; charset=utf-8');
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+
+    $shopPlaceholderImage = 'assets/defaultP.jpg';
+    ob_start();
+    if (empty($products)) {
+        echo '<p style="padding: 24px; color: #475569;">Aktiv məhsul tapılmadı.</p>';
+    } else {
+        foreach ($products as $product) {
+            $productImage = trim((string) ($product['image_url'] ?? ''));
+            $cardImageSrc = $productImage !== '' ? $productImage : $shopPlaceholderImage;
+            $imgClass = 'product-card__img product-card__img--primary' . ($productImage === '' ? ' product-card__img--placeholder' : '');
+            $cardBasePrice = (float) $product['base_price'];
+            $cardComparePrice = (float) ($product['compare_at_price'] ?? 0);
+            $cardListPrice = $cardComparePrice > $cardBasePrice ? $cardComparePrice : null;
+            ?>
+            <div
+                class="product-card js-product-card"
+                data-href="product_details.php?slug=<?php echo urlencode((string) $product['slug']); ?>"
+                role="link"
+                tabindex="0">
+                <div class="product-card__image-box">
+                    <button
+                        class="product-compare-btn js-product-compare-btn"
+                        type="button"
+                        aria-label="Müqayisə et"
+                        data-product-id="<?php echo (int) $product['id']; ?>"
+                        data-product-slug="<?php echo e((string) $product['slug']); ?>"
+                        data-product-name="<?php echo e((string) $product['name']); ?>">
+                        <span class="material-symbols-outlined">balance</span>
+                    </button>
+                    <img
+                        alt="<?php echo e($product['name']); ?>"
+                        class="<?php echo e($imgClass); ?>"
+                        width="480"
+                        height="480"
+                        loading="lazy"
+                        decoding="async"
+                        src="<?php echo e($cardImageSrc); ?>"
+                        <?php if ($productImage !== ''): ?>
+                            onerror="this.onerror=null;this.src='<?php echo e($shopPlaceholderImage); ?>';"
+                        <?php endif; ?> />
+                    <div class="badge badge--primary"><?php echo e($product['brand_name'] ?: 'MAXHOME'); ?></div>
+                </div>
+                <div class="product-card__content">
+                    <div class="product-card__header">
+                        <h3 class="product-card__title"><?php echo e($product['name']); ?></h3>
+                    </div>
+                    <div class="rating">
+                        <span class="review-count">
+                            Reytinq: <?php echo number_format((float) $product['rating_avg'], 1); ?> (<?php echo (int) $product['rating_count']; ?>)
+                        </span>
+                    </div>
+                    <div class="product-card__meta-row">
+                        <a
+                            class="product-card__link"
+                            href="product_details.php?slug=<?php echo urlencode((string) $product['slug']); ?>">
+                            Ətraflı
+                        </a>
+                        <div class="product-card__price-block">
+                            <?php if ($cardListPrice !== null): ?>
+                                <span class="product-card__price-compare"><?php echo number_format($cardListPrice, 2); ?> ₼</span>
+                            <?php endif; ?>
+                            <span class="product-card__price<?php echo $cardListPrice !== null ? ' product-card__price--sale' : ''; ?>">
+                                <?php echo number_format($cardBasePrice, 2); ?> ₼
+                            </span>
+                        </div>
+                    </div>
+                    <form method="post" class="product-card__cart-form">
+                        <input type="hidden" name="product_id" value="<?php echo (int) $product['id']; ?>">
+                        <input type="hidden" name="quantity" value="1">
+                        <button class="btn-add" type="submit" name="add_to_cart" <?php echo (int) $product['stock_qty'] < 1 ? 'disabled' : ''; ?>>
+                            <span class="material-symbols-outlined" style="font-size: 14px;">shopping_bag</span>
+                            <?php echo (int) $product['stock_qty'] < 1 ? 'Stokda yoxdur' : 'Səbətə əlavə et'; ?>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <?php
+        }
+    }
+    $gridHtml = ob_get_clean();
+
+    ob_start();
+    if ($totalPages > 1) {
+        ?>
+        <nav class="pagination" aria-label="Məhsul səhifələri">
+            <?php if ($page > 1): ?>
+                <a class="page-btn" href="<?php echo e($shopPaginationUrl($shopPaginationQuery, $page - 1)); ?>" aria-label="Əvvəlki səhifə">
+                    <span class="material-symbols-outlined" style="font-size: 20px;">chevron_left</span>
+                </a>
+            <?php else: ?>
+                <span class="page-btn" style="opacity: 0.4; pointer-events: none;" aria-hidden="true">
+                    <span class="material-symbols-outlined" style="font-size: 20px;">chevron_left</span>
+                </span>
+            <?php endif; ?>
+
+            <?php
+            $pageWindow = 2;
+            $pagesToShow = [];
+            $pagesToShow[] = 1;
+            for ($p = max(2, $page - $pageWindow); $p <= min($totalPages - 1, $page + $pageWindow); $p++) {
+                $pagesToShow[] = $p;
+            }
+            if ($totalPages > 1) {
+                $pagesToShow[] = $totalPages;
+            }
+            $pagesToShow = array_values(array_unique($pagesToShow));
+            sort($pagesToShow);
+            $prevShown = 0;
+            foreach ($pagesToShow as $pNum):
+                if ($prevShown > 0 && $pNum - $prevShown > 1): ?>
+                    <span class="page-dots">…</span>
+                <?php endif;
+                $prevShown = $pNum;
+                if ($pNum === $page): ?>
+                    <span class="page-btn page-btn--active" aria-current="page"><?php echo $pNum; ?></span>
+                <?php else: ?>
+                    <a class="page-btn" href="<?php echo e($shopPaginationUrl($shopPaginationQuery, $pNum)); ?>"><?php echo $pNum; ?></a>
+                <?php endif;
+            endforeach;
+            ?>
+
+            <?php if ($page < $totalPages): ?>
+                <a class="page-btn" href="<?php echo e($shopPaginationUrl($shopPaginationQuery, $page + 1)); ?>" aria-label="Növbəti səhifə">
+                    <span class="material-symbols-outlined" style="font-size: 20px;">chevron_right</span>
+                </a>
+            <?php else: ?>
+                <span class="page-btn" style="opacity: 0.4; pointer-events: none;" aria-hidden="true">
+                    <span class="material-symbols-outlined" style="font-size: 20px;">chevron_right</span>
+                </span>
+            <?php endif; ?>
+        </nav>
+        <?php
+    }
+    $paginationHtml = ob_get_clean();
+
+    if ($totalProducts > 0) {
+        $countHtml = $rangeStart . '–' . $rangeEnd . ' / ' . $totalProducts . ' məhsul';
+        if ($totalPages > 1) {
+            $countHtml .= ' · Səhifə ' . $page . ' / ' . $totalPages;
+        }
+    } else {
+        $countHtml = '0 məhsul tapıldı';
+    }
+
+    echo json_encode([
+        'ok' => true,
+        'q' => $searchQuery,
+        'total' => $totalProducts,
+        'page' => $page,
+        'total_pages' => $totalPages,
+        'count_html' => $countHtml,
+        'grid_html' => $gridHtml,
+        'pagination_html' => $paginationHtml,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="az">
@@ -874,7 +1037,7 @@ $products = $productsStmt->fetchAll() ?: [];
     <link rel="stylesheet" href="assets/css/product_compare.css">
 </head>
 
-<body class="shop-is-loading">
+<body class="shop-is-loading" data-mh-shop-live="1">
     <?php $currentPage = 'shop page'; ?>
     <?php include 'navbar.php'; ?>
     <main class="container main-content">
@@ -886,7 +1049,7 @@ $products = $productsStmt->fetchAll() ?: [];
                 <h1 class="hero__title">Yeni Nəsil Mobil Texnologiya</h1>
                 <p class="hero__description" hidden="true">Products are now served directly from database.</p>
             </div>
-            <div class="product-count">
+            <div class="product-count" id="shop_product_count">
                 <?php if ($totalProducts > 0): ?>
                     <?php echo $rangeStart; ?>–<?php echo $rangeEnd; ?> / <?php echo $totalProducts; ?> məhsul
                     <?php if ($totalPages > 1): ?>
@@ -1080,8 +1243,8 @@ $products = $productsStmt->fetchAll() ?: [];
                     </div>
                 </div>
 
-                <div class="shop-content">
-                <div class="product-grid">
+                <div class="shop-content" id="shop_content">
+                <div class="product-grid" id="shop_product_grid">
                     <?php if (empty($products)): ?>
                         <p style="padding: 24px; color: #475569;">Aktiv məhsul tapılmadı.</p>
                     <?php else: ?>
@@ -1160,6 +1323,7 @@ $products = $productsStmt->fetchAll() ?: [];
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </div>
+                <div id="shop_pagination_host">
                 <?php if ($totalPages > 1): ?>
                     <nav class="pagination" aria-label="Məhsul səhifələri">
                         <?php if ($page > 1): ?>
@@ -1209,6 +1373,7 @@ $products = $productsStmt->fetchAll() ?: [];
                         <?php endif; ?>
                     </nav>
                 <?php endif; ?>
+                </div>
                 </div>
             </div>
         </div>
@@ -1702,36 +1867,185 @@ $products = $productsStmt->fetchAll() ?: [];
     </script>
     <script>
         (function () {
-            var cards = document.querySelectorAll('.js-product-card');
-            if (!cards.length) {
-                return;
-            }
-
             function isInteractiveElement(target) {
                 return !!target.closest('a, button, input, select, textarea, label, form');
             }
 
-            cards.forEach(function (card) {
-                var targetUrl = card.getAttribute('data-href');
-                if (!targetUrl) {
+            function bindProductCards(root) {
+                var scope = root || document;
+                scope.querySelectorAll('.js-product-card').forEach(function (card) {
+                    if (card.dataset.cardBound === '1') {
+                        return;
+                    }
+                    var targetUrl = card.getAttribute('data-href');
+                    if (!targetUrl) {
+                        return;
+                    }
+                    card.dataset.cardBound = '1';
+                    card.addEventListener('click', function (event) {
+                        if (isInteractiveElement(event.target)) {
+                            return;
+                        }
+                        window.location.href = targetUrl;
+                    });
+                    card.addEventListener('keydown', function (event) {
+                        if (event.key !== 'Enter' && event.key !== ' ') {
+                            return;
+                        }
+                        event.preventDefault();
+                        window.location.href = targetUrl;
+                    });
+                });
+            }
+
+            window.maxhomeBindShopProductCards = bindProductCards;
+            bindProductCards(document);
+        })();
+    </script>
+    <script>
+        (function () {
+            var searchInput = document.getElementById('maxhome-search-input');
+            var grid = document.getElementById('shop_product_grid');
+            var countEl = document.getElementById('shop_product_count');
+            var paginationHost = document.getElementById('shop_pagination_host');
+            var qHidden = document.querySelector('#filter_form input[name="q"]');
+            if (!searchInput || !grid) {
+                return;
+            }
+
+            var debounceTimer = null;
+            var controller = null;
+            var lastQuerySent = null;
+
+            function currentFilterParams() {
+                var params = new URLSearchParams(window.location.search);
+                params.delete('ajax_products');
+                params.delete('page');
+                return params;
+            }
+
+            function updateUrl(query) {
+                var params = currentFilterParams();
+                var clean = String(query || '').trim();
+                if (clean !== '') {
+                    params.set('q', clean);
+                } else {
+                    params.delete('q');
+                }
+                var qs = params.toString();
+                var nextUrl = 'shop_page.php' + (qs ? ('?' + qs) : '');
+                window.history.replaceState({ q: clean }, '', nextUrl);
+            }
+
+            function syncHiddenQ(query) {
+                var clean = String(query || '').trim();
+                if (!qHidden) {
+                    var form = document.getElementById('filter_form');
+                    if (!form) {
+                        return;
+                    }
+                    if (clean === '') {
+                        return;
+                    }
+                    qHidden = document.createElement('input');
+                    qHidden.type = 'hidden';
+                    qHidden.name = 'q';
+                    form.insertBefore(qHidden, form.firstChild);
+                }
+                if (clean === '') {
+                    qHidden.remove();
+                    qHidden = null;
                     return;
                 }
+                qHidden.value = clean;
+            }
 
-                card.addEventListener('click', function (event) {
-                    if (isInteractiveElement(event.target)) {
-                        return;
-                    }
-                    window.location.href = targetUrl;
-                });
+            function applyLiveResults(data, query) {
+                if (countEl && typeof data.count_html === 'string') {
+                    countEl.innerHTML = data.count_html;
+                }
+                grid.innerHTML = data.grid_html || '<p style="padding: 24px; color: #475569;">Aktiv məhsul tapılmadı.</p>';
+                if (paginationHost) {
+                    paginationHost.innerHTML = data.pagination_html || '';
+                }
+                syncHiddenQ(query);
+                updateUrl(query);
+                if (typeof window.maxhomeBindShopProductCards === 'function') {
+                    window.maxhomeBindShopProductCards(grid);
+                }
+                if (window.MaxhomeProductCompare && typeof window.MaxhomeProductCompare.refresh === 'function') {
+                    window.MaxhomeProductCompare.refresh();
+                }
+                document.body.classList.remove('shop-is-loading');
+            }
 
-                card.addEventListener('keydown', function (event) {
-                    if (event.key !== 'Enter' && event.key !== ' ') {
-                        return;
-                    }
+            function liveSearch(query) {
+                var clean = String(query || '').trim();
+                if (clean === lastQuerySent) {
+                    return;
+                }
+                lastQuerySent = clean;
+
+                if (controller) {
+                    controller.abort();
+                }
+                controller = new AbortController();
+                document.body.classList.add('shop-is-loading');
+
+                var params = currentFilterParams();
+                if (clean !== '') {
+                    params.set('q', clean);
+                } else {
+                    params.delete('q');
+                }
+                params.set('ajax_products', '1');
+
+                fetch('shop_page.php?' + params.toString(), {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    signal: controller.signal
+                })
+                    .then(function (response) {
+                        return response.json().then(function (data) {
+                            if (!response.ok || !data || data.ok !== true) {
+                                throw new Error('live search failed');
+                            }
+                            return data;
+                        });
+                    })
+                    .then(function (data) {
+                        applyLiveResults(data, clean);
+                    })
+                    .catch(function (err) {
+                        if (err && err.name === 'AbortError') {
+                            return;
+                        }
+                        document.body.classList.remove('shop-is-loading');
+                    });
+            }
+
+            function scheduleLiveSearch() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(function () {
+                    liveSearch(searchInput.value || '');
+                }, 280);
+            }
+
+            searchInput.addEventListener('input', scheduleLiveSearch);
+            searchInput.addEventListener('keyup', scheduleLiveSearch);
+            searchInput.addEventListener('search', scheduleLiveSearch);
+
+            var searchForm = searchInput.closest('form');
+            if (searchForm) {
+                searchForm.addEventListener('submit', function (event) {
                     event.preventDefault();
-                    window.location.href = targetUrl;
+                    clearTimeout(debounceTimer);
+                    liveSearch(searchInput.value || '');
                 });
-            });
+            }
+
+            lastQuerySent = String(searchInput.value || '').trim();
         })();
     </script>
     <script src="assets/js/product_compare.js"></script>

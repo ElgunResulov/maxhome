@@ -430,6 +430,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_
         if (!suggestBox) {
             return;
         }
+        // Mağaza səhifəsində nəticələr shop-layout-da live yenilənir
+        if (document.body && document.body.getAttribute('data-mh-shop-live') === '1') {
+            hideSuggestions();
+            return;
+        }
         var cleanQuery = String(query || '').trim();
         if (cleanQuery.length === 0) {
             hideSuggestions();
