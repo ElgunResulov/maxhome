@@ -29,6 +29,22 @@ function maxhome_mega_root_icon_map(): array
         'ev-bag' => 'chair',
         'mebel-tekstil-dekor' => 'weekend',
         'qab-qacaq' => 'restaurant',
+        'avtomobil-mehsullari' => 'directions_car',
+        'bir-gaming' => 'joystick',
+        'enerji-toplama-cihazlari-ve-adapterler' => 'battery_charging_full',
+        'ev-esyalari' => 'home',
+        'fotoaparatlar' => 'photo_camera',
+        'geyim-ayaqqabi-ve-aksessuarlar' => 'checkroom',
+        'hdmi-kabeller' => 'cable',
+        'idman-ve-eylence' => 'fitness_center',
+        'kitablar-hobbi-mekteb-ve-ofis-levazimatlari' => 'menu_book',
+        'mikrofonlar' => 'mic',
+        'temir-ve-tikinti' => 'construction',
+        'teras-ucun-deyisdirilen-kartricler' => 'cut',
+        'teras-ucun-ulgucler' => 'content_cut',
+        'usaqlar-ucun-mehsullar' => 'toys',
+        'wi-fi-routerler' => 'router',
+        'zoo-mehsullar' => 'pets',
     ];
 }
 
@@ -481,15 +497,68 @@ function maxhome_mega_menu_panels_load_category_tree(PDO $pdo): ?array
     ];
 }
 
+function maxhome_mega_menu_cache_path(): string
+{
+    return rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
+        . DIRECTORY_SEPARATOR
+        . 'maxhome_mega_menu_v1.json';
+}
+
+/**
+ * @return list<array<string, mixed>>|null
+ */
+function maxhome_mega_menu_cache_get(int $ttlSeconds = 300): ?array
+{
+    $path = maxhome_mega_menu_cache_path();
+    if (!is_file($path) || (time() - (int) filemtime($path)) > $ttlSeconds) {
+        return null;
+    }
+
+    $json = file_get_contents($path);
+    if ($json === false || $json === '') {
+        return null;
+    }
+    $panels = json_decode($json, true);
+
+    return is_array($panels) ? $panels : null;
+}
+
+/**
+ * @param list<array<string, mixed>> $panels
+ */
+function maxhome_mega_menu_cache_set(array $panels): void
+{
+    $json = json_encode($panels, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($json === false) {
+        return;
+    }
+
+    @file_put_contents(maxhome_mega_menu_cache_path(), $json, LOCK_EX);
+}
+
 /** @return list<array{icon:string,label:string,slug:?string,panel:array<int, array<int, array{title:string, links: list<array{label:string, slug:?string}>}>>}> */
 function maxhome_mega_menu_panels(): array
 {
+    static $panels = null;
+    if (is_array($panels)) {
+        return $panels;
+    }
+
+    $cached = maxhome_mega_menu_cache_get();
+    if ($cached !== null) {
+        $panels = $cached;
+        return $panels;
+    }
+
     try {
         require_once __DIR__ . '/../db.php';
-        return maxhome_mega_menu_panels_hydrated(db());
+        $panels = maxhome_mega_menu_panels_hydrated(db());
+        maxhome_mega_menu_cache_set($panels);
     } catch (Throwable $e) {
-        return maxhome_mega_menu_panels_static();
+        $panels = maxhome_mega_menu_panels_static();
     }
+
+    return $panels;
 }
 
 /** @return list<array{icon:string,label:string,slug:?string,panel:array<int, array<int, array{title:string, links: list<array{label:string, slug:?string}>}>>}> */
@@ -1172,6 +1241,54 @@ function maxhome_mega_menu_panels_static(): array
             ],
         ],
     ];
+}
+
+/**
+ * Mobil (telefon) üçün tam ekran kataloq modalı — mega menyu datasından qurulur.
+ */
+function maxhome_render_mobile_cats_modal(): void
+{
+    require_once __DIR__ . '/../db.php';
+    $panels = maxhome_mega_menu_panels();
+
+    echo '<div class="maxhome-cats-modal" id="maxhome-cats-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Kataloq">';
+    echo '<div class="maxhome-cats-modal__head">';
+    echo '<strong class="maxhome-cats-modal__title">Kataloq</strong>';
+    echo '<button class="maxhome-icon-btn maxhome-cats-modal__close" type="button" aria-label="Kataloqu bağla">';
+    echo '<span class="material-symbols-outlined" aria-hidden="true">close</span>';
+    echo '</button>';
+    echo '</div>';
+    echo '<div class="maxhome-cats-modal__body">';
+
+    foreach ($panels as $idx => $main) {
+        $rootSlug = (string) ($main['slug'] ?? '');
+        $panelId = 'maxhome-cats-modal-panel-' . $idx;
+
+        echo '<div class="maxhome-cats-modal__group">';
+        echo '<button class="maxhome-cats-modal__root" type="button" aria-expanded="false" aria-controls="' . e($panelId) . '">';
+        echo '<span class="material-symbols-outlined" aria-hidden="true">' . e((string) $main['icon']) . '</span>';
+        echo '<span class="maxhome-cats-modal__root-label">' . e((string) $main['label']) . '</span>';
+        echo '<span class="material-symbols-outlined maxhome-cats-modal__chev" aria-hidden="true">expand_more</span>';
+        echo '</button>';
+        echo '<div class="maxhome-cats-modal__panel" id="' . e($panelId) . '" hidden>';
+        echo '<a class="maxhome-cats-modal__all" href="' . e(maxhome_mega_shop_url($rootSlug !== '' ? $rootSlug : null)) . '">Hamısına bax</a>';
+
+        foreach ($main['panel'] as $col) {
+            foreach ($col as $block) {
+                echo '<h4 class="maxhome-cats-modal__block-title">' . e((string) ($block['title'] ?? '')) . '</h4>';
+                foreach ($block['links'] as $link) {
+                    $href = maxhome_mega_shop_url($link['slug'] ?? null);
+                    echo '<a class="maxhome-cats-modal__link" href="' . e($href) . '">' . e((string) ($link['label'] ?? '')) . '</a>';
+                }
+            }
+        }
+
+        echo '</div>';
+        echo '</div>';
+    }
+
+    echo '</div>';
+    echo '</div>';
 }
 
 function maxhome_render_mega_menu(): void

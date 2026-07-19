@@ -1,3 +1,43 @@
+.categories-page {
+    margin: 0;
+    color: #1a1c1c;
+    background: #f9f9f9;
+    font-family: "Manrope", sans-serif;
+}
+
+.categories-main {
+    width: 100%;
+    max-width: 1536px;
+    margin: 0 auto;
+    padding: 8rem 2rem 5rem;
+}
+
+.categories-intro {
+    margin-bottom: 4rem;
+}
+
+.categories-title {
+    margin: 0 0 1rem;
+    color: #001e40;
+    font-family: "Inter", sans-serif;
+    font-size: clamp(3rem, 7vw, 6rem);
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    line-height: 0.95;
+}
+
+.categories-title span {
+    color: #799dd6;
+}
+
+.categories-subtitle {
+    max-width: 42rem;
+    margin: 0;
+    color: #525f75;
+    font-size: 1.25rem;
+    line-height: 1.7;
+}
+
 .mosaic-grid {
     display: grid;
     grid-template-columns: repeat(12, 1fr);
@@ -10,6 +50,36 @@
     overflow: hidden;
     border-radius: 1.5rem;
     transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.category-overlay,
+.category-card-content {
+    position: absolute;
+    inset: 0;
+}
+
+.category-overlay {
+    background: rgba(0, 0, 0, 0.1);
+    transition: background-color 0.5s ease;
+}
+
+.category-card-content {
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 2.5rem;
+}
+
+.category-card-content--top {
+    justify-content: flex-start;
+    padding: 2rem;
+}
+
+.category-card-content--center {
+    align-items: center;
+    padding: 2rem;
+    text-align: center;
 }
 
 .mosaic-item:hover .category-image {
@@ -30,6 +100,353 @@
 .glass-tag {
     backdrop-filter: blur(12px);
     background: rgba(255, 255, 255, 0.7);
+}
+
+.category-pill {
+    align-self: flex-start;
+    margin-bottom: 1rem;
+    padding: 0.5rem 1.5rem;
+    border-radius: 9999px;
+}
+
+.category-eyebrow {
+    color: #001e40;
+    font-family: "Inter", sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+}
+
+.category-card-title {
+    margin: 0 0 1.5rem;
+    color: #fff;
+    font-family: "Inter", sans-serif;
+    font-size: 2.25rem;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.category-card-title--small {
+    margin-bottom: 1rem;
+    font-size: 1.875rem;
+}
+
+.category-card-description,
+.category-feature-list {
+    max-width: 28rem;
+    margin: 0 0 1.5rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    opacity: 0;
+    transform: translateY(0.5rem);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.category-feature-list {
+    display: grid;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    padding: 0;
+    list-style: none;
+}
+
+.category-feature-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.category-feature-list .material-symbols-outlined {
+    font-size: 0.75rem;
+}
+
+.mosaic-item:hover .category-card-description,
+.mosaic-item:hover .category-feature-list {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.category-card-actions {
+    display: flex;
+    gap: 1rem;
+    opacity: 0;
+    transform: translateY(1rem);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.mosaic-item:hover .category-card-actions {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.category-button {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    border: 0;
+    border-radius: 9999px;
+    font-family: "Inter", sans-serif;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.category-button--light {
+    color: #001e40;
+    background: #fff;
+}
+
+.category-button--light:hover {
+    color: #fff;
+    background: #001e40;
+}
+
+.category-button--glass {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.category-button--glass:hover {
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.category-button--primary {
+    padding: 0.5rem 1.25rem;
+    color: #fff;
+    background: #003366;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.category-button--outline {
+    padding: 0.5rem 1.5rem;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: transparent;
+}
+
+.category-button--outline:hover {
+    color: #001e40;
+    background: #fff;
+}
+
+.category-top-label {
+    color: #fff;
+    font-family: "Inter", sans-serif;
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+.category-card-bottom {
+    margin-top: auto;
+}
+
+.category-card-subtitle {
+    margin: 0 0 1rem;
+    color: #fff;
+    font-size: 1.25rem;
+    font-weight: 500;
+}
+
+.category-progress {
+    width: 0;
+    height: 0.25rem;
+    background: #fff;
+    transition: width 0.7s ease;
+}
+
+.mosaic-item:hover .category-progress {
+    width: 100%;
+}
+
+.category-card-slug {
+    margin: 0 0 1rem;
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+}
+
+.category-gaming {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 3rem;
+    overflow: hidden;
+    background: #e8e8e8;
+}
+
+.category-gaming__copy {
+    position: relative;
+    z-index: 1;
+    max-width: 55%;
+    padding: 2.5rem 0;
+}
+
+.category-gaming__title {
+    margin: 0;
+    color: #003366;
+    font-family: "Inter", sans-serif;
+    font-size: 2.25rem;
+    font-weight: 800;
+}
+
+.category-gaming__description {
+    margin: 0.5rem 0 0;
+    color: #525f75;
+}
+
+.category-gaming__image {
+    width: auto;
+    height: 120%;
+    object-fit: contain;
+    transition: transform 0.7s ease;
+}
+
+.mosaic-item:hover .category-gaming__image {
+    transform: rotate(6deg);
+}
+
+.category-gaming__link {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 3rem;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.mosaic-item:hover .category-gaming__link {
+    opacity: 1;
+}
+
+.category-round-icon {
+    padding: 1rem;
+    color: #fff;
+    border-radius: 50%;
+    background: #001e40;
+}
+
+.concierge {
+    position: relative;
+    margin-top: 8rem;
+    padding: 4rem;
+    color: #fff;
+    border-radius: 2rem;
+    overflow: hidden;
+    background: #003366;
+}
+
+.concierge__content {
+    position: relative;
+    z-index: 1;
+    max-width: 36rem;
+}
+
+.concierge__title {
+    margin: 0 0 1.5rem;
+    font-family: "Inter", sans-serif;
+    font-size: 2.25rem;
+}
+
+.concierge__description {
+    margin: 0 0 2rem;
+    color: #b8cef0;
+    font-size: 1.125rem;
+    line-height: 1.7;
+}
+
+.concierge__button {
+    padding: 1rem 2.5rem;
+    color: #001e40;
+    border: 0;
+    border-radius: 9999px;
+    background: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.concierge__button:hover {
+    transform: scale(1.05);
+}
+
+.concierge__orb {
+    position: absolute;
+    right: -5rem;
+    bottom: -5rem;
+    width: 24rem;
+    height: 24rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.concierge__icon-wrap {
+    position: absolute;
+    top: 0;
+    right: 5rem;
+    opacity: 0.2;
+}
+
+.concierge__icon {
+    font-size: 18.75rem;
+    font-weight: 100;
+}
+
+.categories-footer {
+    width: 100%;
+    border-radius: 24px 24px 0 0;
+    background: #f1f5f9;
+}
+
+.categories-footer__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1536px;
+    margin: 5rem auto 0;
+    padding: 3rem 2.5rem;
+}
+
+.categories-footer__logo {
+    margin-bottom: 0.5rem;
+    color: #172554;
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+.categories-footer__copy {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.875rem;
+}
+
+.categories-footer__links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2rem;
+    font-size: 0.875rem;
+}
+
+.categories-footer__links a {
+    color: #64748b;
+    text-decoration: none;
+}
+
+.categories-footer__links a:hover {
+    color: #0f172a;
+    text-decoration: underline;
+    text-underline-offset: 4px;
 }
 
 .span-8-2 {
@@ -58,6 +475,10 @@
 }
 
 @media (max-width: 1024px) {
+    .categories-main {
+        padding-inline: 1.5rem;
+    }
+
     .mosaic-grid {
         grid-template-columns: repeat(2, 1fr);
         grid-auto-rows: 300px;
@@ -74,8 +495,98 @@
 }
 
 @media (max-width: 640px) {
+    .categories-main {
+        padding: 7rem 1rem 4rem;
+    }
+
+    .categories-intro {
+        margin-bottom: 2.5rem;
+    }
+
+    .categories-title {
+        font-size: 3rem;
+    }
+
+    .categories-subtitle {
+        font-size: 1rem;
+    }
+
     .mosaic-grid {
         grid-template-columns: 1fr;
         grid-auto-rows: minmax(200px, auto);
+        gap: 1rem;
+    }
+
+    .mosaic-item {
+        min-height: 320px;
+    }
+
+    .category-card-content {
+        padding: 1.5rem;
+    }
+
+    .category-card-title,
+    .category-card-title--small {
+        font-size: 1.75rem;
+    }
+
+    .category-gaming {
+        padding: 0 1.5rem;
+    }
+
+    .category-gaming__copy {
+        max-width: 70%;
+    }
+
+    .category-gaming__title {
+        font-size: 1.75rem;
+    }
+
+    .category-gaming__image {
+        position: absolute;
+        right: -25%;
+        opacity: 0.55;
+    }
+
+    .concierge {
+        margin-top: 5rem;
+        padding: 2rem;
+    }
+
+    .concierge__icon-wrap {
+        right: -3rem;
+    }
+
+    .concierge__icon {
+        font-size: 12rem;
+    }
+
+    .categories-footer__inner {
+        flex-direction: column;
+        gap: 2rem;
+        margin-top: 4rem;
+        text-align: center;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mosaic-item,
+    .category-image,
+    .category-overlay,
+    .category-card-description,
+    .category-feature-list,
+    .category-card-actions,
+    .category-button,
+    .category-progress,
+    .category-gaming__image,
+    .category-gaming__link,
+    .concierge__button {
+        transition: none !important;
+    }
+
+    .mosaic-item:hover .category-image,
+    .mosaic-item:hover .category-gaming__image,
+    .concierge__button:hover {
+        transform: none;
     }
 }

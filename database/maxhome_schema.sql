@@ -113,6 +113,9 @@ CREATE TABLE products (
   online_visible TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_products_catalog_newest (status, online_visible, created_at, id),
+  KEY idx_products_catalog_price (status, online_visible, base_price, id),
+  KEY idx_products_category_catalog (category_id, status, online_visible, created_at, id),
   CONSTRAINT fk_products_category
     FOREIGN KEY (category_id) REFERENCES categories(id),
   CONSTRAINT fk_products_brand
@@ -127,6 +130,7 @@ CREATE TABLE product_images (
   is_primary TINYINT(1) NOT NULL DEFAULT 0,
   sort_order INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_product_images_primary (product_id, is_primary DESC, sort_order, id),
   CONSTRAINT fk_product_images_product
     FOREIGN KEY (product_id) REFERENCES products(id)
     ON DELETE CASCADE

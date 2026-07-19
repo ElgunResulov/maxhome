@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Ödəniş | MAXHOME</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/foundation.css">
-    <link rel="stylesheet" href="assets/css/navbar.css">
+    <link rel="stylesheet" href="assets/css/navbar.css?v=<?php echo filemtime(__DIR__ . '/assets/css/navbar.css'); ?>">
     <link rel="stylesheet" href="assets/css/checkout.css">
 </head>
 <body>
@@ -245,7 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
         <div class="copyright-section">
-            <p class="copyright-text">© 2024 MAXHOME Electronics. Rəqəmsal konsyerj təcrübəsi.</p>
+            <p class="copyright-text">© 2026 | Developed by INTBAKU LLC</p>
         </div>
     </footer>
 </body>

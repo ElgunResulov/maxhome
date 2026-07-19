@@ -293,7 +293,7 @@ if (count($bundleProductsDisplay) > 1) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Manrope:wght@300;400;500;600&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/foundation.css">
-    <link rel="stylesheet" href="assets/css/navbar.css">
+    <link rel="stylesheet" href="assets/css/navbar.css?v=<?php echo filemtime(__DIR__ . '/assets/css/navbar.css'); ?>">
     <link rel="stylesheet" href="assets/css/product_details.css">
 </head>
 <body>
@@ -331,6 +331,10 @@ if (count($bundleProductsDisplay) > 1) {
                             alt="<?php echo e($mainAlt); ?>"
                             class="gallery__image"
                             id="product-main-image"
+                            width="900"
+                            height="900"
+                            decoding="async"
+                            fetchpriority="high"
                             src="<?php echo e($mainImage); ?>"
                         />
                     </div>
@@ -344,7 +348,15 @@ if (count($bundleProductsDisplay) > 1) {
                                     data-image-alt="<?php echo e((string) ($image['alt_text'] ?: $product['name'])); ?>"
                                     aria-label="Sekli sec"
                                 >
-                                    <img alt="<?php echo e($image['alt_text'] ?: $product['name']); ?>" class="gallery__thumb-img" src="<?php echo e($image['image_url']); ?>" />
+                                    <img
+                                        alt="<?php echo e($image['alt_text'] ?: $product['name']); ?>"
+                                        class="gallery__thumb-img"
+                                        width="120"
+                                        height="120"
+                                        loading="lazy"
+                                        decoding="async"
+                                        src="<?php echo e($image['image_url']); ?>"
+                                    />
                                 </button>
                             <?php endforeach; ?>
                         </div>
@@ -490,7 +502,7 @@ if (count($bundleProductsDisplay) > 1) {
                         <input type="hidden" name="ecosystem_parent_id" value="<?php echo (int) $product['id']; ?>">
                         <div class="ecosystem-items">
                             <div class="ecosystem-card ecosystem-card--main">
-                                <img alt="<?php echo e($mainAlt); ?>" class="ecosystem-img" src="<?php echo e($mainImage); ?>" />
+                                <img alt="<?php echo e($mainAlt); ?>" class="ecosystem-img" width="160" height="160" loading="lazy" decoding="async" src="<?php echo e($mainImage); ?>" />
                                 <span class="ecosystem-name">Bu məhsul</span>
                                 <p class="ecosystem-price"><?php echo number_format($mainPrice, 2); ?> ₼</p>
                             </div>
@@ -504,7 +516,7 @@ if (count($bundleProductsDisplay) > 1) {
                                 $bPrice = (float) $bp['base_price'];
                                 ?>
                                 <div class="ecosystem-card<?php echo $bInStock ? '' : ' ecosystem-card--muted'; ?>">
-                                    <img alt="<?php echo e((string) $bp['name']); ?>" class="ecosystem-img ecosystem-img--cover" src="<?php echo e($bImg); ?>" />
+                                    <img alt="<?php echo e((string) $bp['name']); ?>" class="ecosystem-img ecosystem-img--cover" width="160" height="160" loading="lazy" decoding="async" src="<?php echo e($bImg); ?>" />
                                     <div>
                                         <p class="ecosystem-name"><?php echo e((string) $bp['name']); ?></p>
                                         <p class="ecosystem-price"><?php echo number_format($bPrice, 2); ?> ₼</p>
@@ -593,7 +605,7 @@ if (count($bundleProductsDisplay) > 1) {
             </div>
         </div>
         <div class="footer__bottom">
-            <p>© 2024 MAXHOME Electronics. Rəqəmsal konsyerj təcrübəsi.</p>
+            <p>© 2026 | Developed by INTBAKU LLC</p>
         </div>
     </footer>
 </body>

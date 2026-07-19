@@ -42,7 +42,7 @@ if (!in_array($selectedPaymentMethod, ['', 'card', 'cash_on_delivery'], true)) {
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@400;500;600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/foundation.css">
-    <link rel="stylesheet" href="assets/css/navbar.css">
+    <link rel="stylesheet" href="assets/css/navbar.css?v=<?php echo filemtime(__DIR__ . '/assets/css/navbar.css'); ?>">
     <link rel="stylesheet" href="assets/css/shopping_cart.css">
 </head>
 <body>
@@ -173,7 +173,7 @@ if (!in_array($selectedPaymentMethod, ['', 'card', 'cash_on_delivery'], true)) {
                     <span class="footer__social-icon material-symbols-outlined">mail</span>
                     <span class="footer__social-icon material-symbols-outlined">chat</span>
                 </div>
-                <p class="footer__copyright">© 2024 MAXHOME Electronics. Rəqəmsal konsyerj təcrübəsi.</p>
+                <p class="footer__copyright">© 2026 | Developed by INTBAKU LLC</p>
             </div>
         </div>
     </footer>

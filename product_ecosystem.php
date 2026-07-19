@@ -122,7 +122,7 @@ $mainAlt = $images[0]['alt_text'] ?? ($product ? (string) $product['name'] : '')
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Manrope:wght@300;400;500;600&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/foundation.css">
-    <link rel="stylesheet" href="assets/css/navbar.css">
+    <link rel="stylesheet" href="assets/css/navbar.css?v=<?php echo filemtime(__DIR__ . '/assets/css/navbar.css'); ?>">
     <link rel="stylesheet" href="assets/css/product_details.css">
 </head>
 <body>
@@ -262,7 +262,7 @@ $mainAlt = $images[0]['alt_text'] ?? ($product ? (string) $product['name'] : '')
             </div>
         </div>
         <div class="footer__bottom">
-            <p>© 2024 MAXHOME Electronics.</p>
+            <p>© 2026 | Developed by INTBAKU LLC</p>
         </div>
     </footer>
 </body>

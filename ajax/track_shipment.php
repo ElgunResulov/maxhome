@@ -4,6 +4,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/../db.php';
 
 header('Content-Type: application/json; charset=utf-8');
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
 
 $rawBody = file_get_contents('php://input');
 $payload = json_decode((string) $rawBody, true);

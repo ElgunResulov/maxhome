@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+define('MAXHOME_I18N_SKIP_DEFAULT_BUFFER', true);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/i18n.php';
 require_once __DIR__ . '/includes/mega_menu.php';
@@ -753,7 +754,7 @@ unset($slideRow);
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/foundation.css">
-    <link rel="stylesheet" href="assets/css/navbar.css">
+    <link rel="stylesheet" href="assets/css/navbar.css?v=<?php echo filemtime(__DIR__ . '/assets/css/navbar.css'); ?>">
     <link rel="stylesheet" href="assets/css/index.css">
     <link rel="stylesheet" href="assets/css/product_compare.css">
 </head>
@@ -766,7 +767,7 @@ unset($slideRow);
         <section class="hero">
             <div class="hero-shell">
                 <?php if (!empty($sidebarCategories)): ?>
-                    <aside class="hero-cats" id="hero-cats" aria-label="<?php echo e(t('categories.title')); ?>" aria-hidden="true">
+                    <aside class="hero-cats" id="hero-cats" aria-label="<?php echo e(t('categories.title')); ?>">
                         <ul class="hero-cats__list">
                             <?php foreach ($sidebarCategories as $sidebarCat): ?>
                                 <?php
@@ -1022,7 +1023,7 @@ unset($slideRow);
         </section>
         <?php endif; ?>
         <!-- Categories -->
-        <section class="section-padding container">
+        <section class="section-padding container" hidden>
             <div class="section-header">
                 <div>
                     <h2 class="section-title"><?php echo e(t('categories.title')); ?></h2>
@@ -1420,7 +1421,7 @@ unset($slideRow);
             </div>
         </div>
         <div class="footer-bottom">
-            <p class="copyright">© 2024 <?php echo e(t('footer.copy')); ?></p>
+            <p class="copyright">© 2026 | Developed by INTBAKU LLC</p>
         </div>
     </footer>
 <script>
@@ -1493,6 +1494,8 @@ unset($slideRow);
         const nextBtn = slider.querySelector('[data-hero-next]');
         const dots = Array.from(slider.querySelectorAll('[data-hero-dot]'));
         const intervalMs = 6000;
+        const prefersReducedMotion = window.matchMedia
+            && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         let currentIndex = 0;
         let autoTimer = null;
 
@@ -1511,6 +1514,9 @@ unset($slideRow);
 
         function startAutoSlide() {
             stopAutoSlide();
+            if (prefersReducedMotion) {
+                return;
+            }
             autoTimer = window.setInterval(function() {
                 goToSlide(currentIndex + 1);
             }, intervalMs);

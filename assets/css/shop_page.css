@@ -779,6 +779,22 @@ body.shop-filters-open .mh-bottom-nav {
     border-radius: 0.5rem;
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .shop-skeleton-block {
+        animation: none;
+        background: #e8ebf2;
+    }
+
+    .product-card,
+    .product-card__img,
+    .btn-add,
+    .chip,
+    .shop-filter-drawer,
+    .shop-filter-backdrop {
+        transition: none !important;
+    }
+}
+
 .shop-skeleton-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

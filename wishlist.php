@@ -61,7 +61,7 @@ $hasIdsParam = array_key_exists('ids', $_GET);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MAXHOME | <?php echo e(t('nav.wishlist', 'Seçilmişlər')); ?></title>
     <link rel="stylesheet" href="assets/css/foundation.css">
-    <link rel="stylesheet" href="assets/css/navbar.css">
+    <link rel="stylesheet" href="assets/css/navbar.css?v=<?php echo filemtime(__DIR__ . '/assets/css/navbar.css'); ?>">
     <link rel="stylesheet" href="assets/css/index.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
     <style>

@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+define('MAXHOME_I18N_SKIP_DEFAULT_BUFFER', true);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/category_brands.php';
 
@@ -690,29 +691,8 @@ foreach ($categoryRows as $row) {
 }
 
 $brandsByScope = [
-    '' => array_values(array_map(static fn(array $r): string => (string) ($r['name'] ?? ''), maxhome_shop_brands_for_category_slug($pdo, '', $categoriesHasBrandIdColumn))),
+    $effectiveCategorySlug => $allowedBrandNamesForCategory,
 ];
-foreach ($rootCategoryOptions as $rootOpt) {
-    $rSlug = (string) ($rootOpt['slug'] ?? '');
-    if ($rSlug === '') {
-        continue;
-    }
-    $brandsByScope[$rSlug] = array_values(array_map(static fn(array $r): string => (string) ($r['name'] ?? ''), maxhome_shop_brands_for_category_slug($pdo, $rSlug, $categoriesHasBrandIdColumn)));
-    foreach (($groupOptionsByRootSlug[$rSlug] ?? []) as $gOpt) {
-        $gSlug = (string) ($gOpt['slug'] ?? '');
-        if ($gSlug === '') {
-            continue;
-        }
-        $brandsByScope[$gSlug] = array_values(array_map(static fn(array $r): string => (string) ($r['name'] ?? ''), maxhome_shop_brands_for_category_slug($pdo, $gSlug, $categoriesHasBrandIdColumn)));
-        foreach (($childOptionsByGroupSlug[$gSlug] ?? []) as $cOpt) {
-            $cSlug = (string) ($cOpt['slug'] ?? '');
-            if ($cSlug === '') {
-                continue;
-            }
-            $brandsByScope[$cSlug] = array_values(array_map(static fn(array $r): string => (string) ($r['name'] ?? ''), maxhome_shop_brands_for_category_slug($pdo, $cSlug, $categoriesHasBrandIdColumn)));
-        }
-    }
-}
 
 $allowedSort = [
     'newest' => 'p.created_at DESC, p.id DESC',
@@ -819,6 +799,22 @@ $shopPaginationUrl = static function (array $baseQuery, int $targetPage): string
     return 'shop_page.php' . ($qs !== '' ? '?' . $qs : '');
 };
 
+$imageJoinSql = "
+        LEFT JOIN (
+            SELECT product_id, image_url
+            FROM (
+                SELECT
+                    product_id,
+                    image_url,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY product_id
+                        ORDER BY is_primary DESC, sort_order ASC, id ASC
+                    ) AS image_rank
+                FROM product_images
+            ) ranked_images
+            WHERE image_rank = 1
+        ) primary_image ON primary_image.product_id = p.id";
+
 $sql = "SELECT
             p.id,
             p.slug,
@@ -831,8 +827,9 @@ $sql = "SELECT
             p.stock_qty,
             b.name AS brand_name,
             c.name AS category_name,
-            (SELECT image_url FROM product_images WHERE product_id = p.id ORDER BY is_primary DESC, sort_order ASC, id ASC LIMIT 1) AS image_url"
+            primary_image.image_url"
     . $joinSql
+    . $imageJoinSql
     . $whereSql
     . " ORDER BY {$orderBy} LIMIT {$perPage} OFFSET {$offset}";
 $productsStmt = $pdo->prepare($sql);
@@ -849,7 +846,7 @@ $products = $productsStmt->fetchAll() ?: [];
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/foundation.css">
-    <link rel="stylesheet" href="assets/css/navbar.css">
+    <link rel="stylesheet" href="assets/css/navbar.css?v=<?php echo filemtime(__DIR__ . '/assets/css/navbar.css'); ?>">
     <link rel="stylesheet" href="assets/css/shop_page.css">
     <link rel="stylesheet" href="assets/css/product_compare.css">
 </head>
@@ -1086,6 +1083,10 @@ $products = $productsStmt->fetchAll() ?: [];
                                     <img
                                         alt="<?php echo e($product['name']); ?>"
                                         class="<?php echo e($imgClass); ?>"
+                                        width="480"
+                                        height="480"
+                                        loading="lazy"
+                                        decoding="async"
                                         src="<?php echo e($cardImageSrc); ?>"
                                         <?php if ($productImage !== ''): ?>
                                             onerror="this.onerror=null;this.src='<?php echo e($shopPlaceholderImage); ?>';"
@@ -1622,6 +1623,7 @@ $products = $productsStmt->fetchAll() ?: [];
                 }
                 closeAllPopovers();
             });
+            var scrollFrame = null;
             window.addEventListener('scroll', function (event) {
                 if (isFocusInsidePopover()) {
                     return;
@@ -1630,8 +1632,14 @@ $products = $productsStmt->fetchAll() ?: [];
                 if (target && target.closest && target.closest('.shop-filter-popover')) {
                     return;
                 }
-                closeAllPopovers();
-            }, true);
+                if (scrollFrame !== null) {
+                    return;
+                }
+                scrollFrame = window.requestAnimationFrame(function () {
+                    scrollFrame = null;
+                    closeAllPopovers();
+                });
+            }, { capture: true, passive: true });
         })();
     </script>
     <script>
@@ -1706,7 +1714,7 @@ $products = $productsStmt->fetchAll() ?: [];
             </div>
         </div>
         <div class="footer__bottom">
-            <span class="footer__copy">© 2024 MAXHOME Electronics. Rəqəmsal konsyerj təcrübəsi.</span>
+            <span class="footer__copy">© 2026 | Developed by INTBAKU LLC</span>
             <div class="footer__legal">
                 <a class="legal-link" href="support_center.php">Etibar mərkəzi</a>
                 <a class="legal-link" href="support_center.php">Məxfilik siyasəti</a>

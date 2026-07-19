@@ -79,7 +79,7 @@ if (empty($supportContactCards)) {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=Manrope:wght@400;500;600&amp;display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/foundation.css">
-    <link rel="stylesheet" href="assets/css/navbar.css">
+    <link rel="stylesheet" href="assets/css/navbar.css?v=<?php echo filemtime(__DIR__ . '/assets/css/navbar.css'); ?>">
     <link rel="stylesheet" href="assets/css/support_center.css">
 </head>
 
@@ -293,7 +293,7 @@ if (empty($supportContactCards)) {
             </div>
         </div>
         <div class="footer-bottom">
-            <p class="copyright">© 2026 MAXHOME Electronics. Digital Concierge Experience.</p>
+            <p class="copyright">© 2026 | Developed by INTBAKU LLC</p>
         </div>
     </footer>
     <!-- Live Chat Floating CTA -->

@@ -476,8 +476,26 @@ function maxhome_start_i18n_buffer(): void
     if (PHP_SAPI === 'cli') {
         return;
     }
+    if (
+        defined('MAXHOME_I18N_SKIP_DEFAULT_BUFFER')
+        && MAXHOME_I18N_SKIP_DEFAULT_BUFFER === true
+        && maxhome_current_lang() === MAXHOME_DEFAULT_LANG
+    ) {
+        return;
+    }
 
     ob_start(static function (string $buffer): string {
+        foreach (headers_list() as $header) {
+            if (stripos($header, 'Content-Type:') !== 0) {
+                continue;
+            }
+            $contentType = strtolower($header);
+            if (!str_contains($contentType, 'text/html') && !str_contains($contentType, 'application/xhtml+xml')) {
+                return $buffer;
+            }
+            break;
+        }
+
         return maxhome_translate_rendered_html($buffer);
     });
 }

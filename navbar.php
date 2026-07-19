@@ -7,6 +7,10 @@ $currentPage = $currentPage ?? '';
 $lang = maxhome_current_lang();
 $searchQuery = trim((string) ($_GET['q'] ?? ''));
 $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
+$canSeeWarehouseSalesLink = isUserLoggedIn() && userHasAnyRole(['seller', 'satici', 'satıcı', 'admin']);
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
 ?>
 <header class="maxhome-topbar">
     <nav class="maxhome-navbar">
@@ -23,7 +27,7 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
             <?php if ($canSeeAddProductLink): ?>
                 <a class="maxhome-navbar__link" href="admin/admin_products.php" title="Admin"><?php echo e(t('nav.add_product')); ?></a>
             <?php endif; ?>
-            <?php if (isUserLoggedIn() && userHasAnyRole(['seller', 'satici', 'satıcı', 'admin'])): ?>
+            <?php if ($canSeeWarehouseSalesLink): ?>
                 <a class="maxhome-navbar__link <?php echo $currentPage === 'warehouse sales' ? 'maxhome-navbar__link--active' : ''; ?>" href="warehouse_sales.php">Anbar Satış</a>
             <?php endif; ?>
         </div>
@@ -34,7 +38,7 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
                 type="button"
                 aria-label="<?php echo e(t('nav.catalog', 'Kataloq')); ?>"
                 aria-expanded="false"
-                aria-controls="hero-cats"
+                aria-controls="maxhome-cats-modal"
                 data-mh-cats-toggle>
                 <span class="material-symbols-outlined" aria-hidden="true">grid_view</span>
             </button>
@@ -101,11 +105,12 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
             <?php if ($canSeeAddProductLink): ?>
                 <a class="maxhome-mobile-drawer__link" href="admin/admin_products.php"><?php echo e(t('nav.add_product')); ?></a>
             <?php endif; ?>
-            <?php if (isUserLoggedIn() && userHasAnyRole(['seller', 'satici', 'satıcı', 'admin'])): ?>
+            <?php if ($canSeeWarehouseSalesLink): ?>
                 <a class="maxhome-mobile-drawer__link <?php echo $currentPage === 'warehouse sales' ? 'maxhome-mobile-drawer__link--active' : ''; ?>" href="warehouse_sales.php">Anbar Satış</a>
             <?php endif; ?>
         </nav>
     </aside>
+    <?php maxhome_render_mobile_cats_modal(); ?>
 </header>
 <nav class="mh-bottom-nav" aria-label="Mobil naviqasiya" data-mh-bottom-nav>
     <a class="mh-bottom-nav__item <?php echo $currentPage === 'categories' || $currentPage === 'shop page' ? 'is-active' : ''; ?>" href="categories.php">
@@ -199,102 +204,69 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
     }
 
     var catsToggle = document.querySelector('[data-mh-cats-toggle]');
-
-    function getHeroCats() {
-        return document.getElementById('hero-cats');
-    }
+    var catsModal = document.getElementById('maxhome-cats-modal');
 
     function isMobileCatsViewport() {
         return window.matchMedia('(max-width: 991px)').matches;
     }
 
-    function setHeroCatsOpen(isOpen) {
-        if (!catsToggle) {
+    function setCatsModalOpen(isOpen) {
+        if (!catsModal || !catsToggle) {
             return;
         }
-        var heroCats = getHeroCats();
-        if (!heroCats) {
-            if (isOpen) {
-                window.location.href = 'index.php?cats=open';
-            }
-            return;
-        }
-        if (!isMobileCatsViewport()) {
-            heroCats.classList.remove('is-open');
-            heroCats.style.display = '';
-            heroCats.setAttribute('aria-hidden', 'false');
-            catsToggle.setAttribute('aria-expanded', 'false');
-            return;
-        }
-        heroCats.classList.toggle('is-open', isOpen);
-        heroCats.style.display = isOpen ? 'block' : 'none';
-        heroCats.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        catsModal.classList.toggle('is-open', isOpen);
+        catsModal.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
         catsToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        document.body.classList.toggle('maxhome-cats-modal-open', isOpen);
         if (isOpen) {
-            heroCats.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            catsModal.scrollTop = 0;
         }
     }
 
-    if (catsToggle) {
+    if (catsToggle && catsModal) {
         catsToggle.addEventListener('click', function (event) {
             event.stopPropagation();
             if (!isMobileCatsViewport()) {
                 return;
             }
-            var heroCats = getHeroCats();
-            var willOpen = !heroCats || !heroCats.classList.contains('is-open');
-            setHeroCatsOpen(willOpen);
+            setCatsModalOpen(!catsModal.classList.contains('is-open'));
         });
-    }
 
-    document.addEventListener('click', function (event) {
-        if (!isMobileCatsViewport()) {
-            return;
+        var catsClose = catsModal.querySelector('.maxhome-cats-modal__close');
+        if (catsClose) {
+            catsClose.addEventListener('click', function () {
+                setCatsModalOpen(false);
+            });
         }
-        var heroCats = getHeroCats();
-        if (!heroCats || !heroCats.classList.contains('is-open')) {
-            return;
-        }
-        if (heroCats.contains(event.target) || (catsToggle && catsToggle.contains(event.target))) {
-            return;
-        }
-        setHeroCatsOpen(false);
-    });
 
-    function syncHeroCatsForViewport() {
-        var heroCats = getHeroCats();
-        if (!heroCats) {
-            return;
-        }
-        if (!isMobileCatsViewport()) {
-            heroCats.classList.remove('is-open');
-            heroCats.style.display = '';
-            heroCats.setAttribute('aria-hidden', 'false');
-            if (catsToggle) {
-                catsToggle.setAttribute('aria-expanded', 'false');
+        catsModal.addEventListener('click', function (event) {
+            var rootBtn = event.target.closest('.maxhome-cats-modal__root');
+            if (rootBtn) {
+                var group = rootBtn.closest('.maxhome-cats-modal__group');
+                var panel = group ? group.querySelector('.maxhome-cats-modal__panel') : null;
+                if (panel) {
+                    var willExpand = panel.hidden;
+                    panel.hidden = !willExpand;
+                    rootBtn.setAttribute('aria-expanded', willExpand ? 'true' : 'false');
+                    group.classList.toggle('is-expanded', willExpand);
+                }
+                return;
             }
-            return;
-        }
-        if (!heroCats.classList.contains('is-open')) {
-            heroCats.style.display = 'none';
-            heroCats.setAttribute('aria-hidden', 'true');
-        }
-    }
+            if (event.target.closest('a')) {
+                setCatsModalOpen(false);
+            }
+        });
 
-    document.addEventListener('DOMContentLoaded', function () {
-        syncHeroCatsForViewport();
-        var catsParam = new URLSearchParams(window.location.search).get('cats');
-        if (catsParam === 'open' && isMobileCatsViewport()) {
-            setHeroCatsOpen(true);
-        }
-    });
-    if (document.readyState !== 'loading') {
-        syncHeroCatsForViewport();
+        window.addEventListener('resize', function () {
+            if (!isMobileCatsViewport() && catsModal.classList.contains('is-open')) {
+                setCatsModalOpen(false);
+            }
+        });
+
         if (new URLSearchParams(window.location.search).get('cats') === 'open' && isMobileCatsViewport()) {
-            setHeroCatsOpen(true);
+            setCatsModalOpen(true);
         }
     }
-    window.addEventListener('resize', syncHeroCatsForViewport);
 
     var searchRoot = document.querySelector('[data-mh-search]');
     var searchInput = document.getElementById('maxhome-search-input');
@@ -443,11 +415,8 @@ $canSeeAddProductLink = isUserLoggedIn() && userHasAnyRole(['admin']);
         if (event.key === 'Escape' && document.body.classList.contains('maxhome-mobile-menu-open')) {
             setMenuOpen(false);
         }
-        if (event.key === 'Escape') {
-            var openCats = getHeroCats();
-            if (openCats && openCats.classList.contains('is-open')) {
-                setHeroCatsOpen(false);
-            }
+        if (event.key === 'Escape' && catsModal && catsModal.classList.contains('is-open')) {
+            setCatsModalOpen(false);
         }
         if (event.key === 'Escape' && suggestBox && !suggestBox.hidden) {
             hideSuggestions();
